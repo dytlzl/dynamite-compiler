@@ -5,17 +5,24 @@ use crate::error::error;
 pub struct AsmGenerator<'a> {
     pub buf: Vec<u8>,
     node_stream: &'a Vec<Node>,
+    target_os: Os,
+}
+
+pub enum Os {
+    Linux,
+    MacOS,
 }
 
 impl<'a> AsmGenerator<'a> {
-    pub fn new(node_stream: &'a Vec<Node>) -> Self {
-        Self { buf: Vec::new(), node_stream }
+    pub fn new(node_stream: &'a Vec<Node>, target_os: Os) -> Self {
+        Self { buf: Vec::new(), node_stream, target_os }
     }
 
     pub fn gen_asm(&mut self, stack_size: usize) -> std::io::Result<()> {
         writeln!(self.buf, ".intel_syntax noprefix")?;
-        writeln!(self.buf, ".globl _main")?;
-        writeln!(self.buf, "_main:")?;
+        let entry_point = if let Os::MacOS = self.target_os { "_main" } else { "main" };
+        writeln!(self.buf, ".globl {}", entry_point)?;
+        writeln!(self.buf, "{}:", entry_point)?;
 
         // prologue
         writeln!(self.buf, "  push rbp")?;
@@ -104,7 +111,11 @@ impl<'a> AsmGenerator<'a> {
                     NodeType::Le => "setle",
                     _ => unreachable!()
                 };
-                writeln!(self.buf, "cmp rax, rdi\n  {} al\n  movzx rax, al", command)?;
+                writeln!(
+                    self.buf,
+                     "cmp rax, rdi\n  {} al\n  {} rax, al",
+                     command,
+                     if let Os::MacOS = self.target_os { "movzx" } else { "movzb" })?;
             }
             _ => {
                 error("unexpected node");

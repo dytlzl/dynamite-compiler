@@ -1,4 +1,4 @@
-use dynamite_compiler::tokenizer::Tokenizer;
+use dynamite_compiler::{generator::Os, tokenizer::Tokenizer};
 use dynamite_compiler::ast::AstBuilder;
 use dynamite_compiler::generator::AsmGenerator;
 
@@ -27,8 +27,9 @@ fn main() {
         for node in &node_stream {
             eprintln!("{}", node.format());
         }
+        eprintln!("[asm]");
     }
-    let mut generator = AsmGenerator::new(&node_stream);
+    let mut generator = AsmGenerator::new(&node_stream, Os::Linux);
     generator.gen_asm(builder.offset_size).unwrap();
     print!("{}", String::from_utf8(generator.buf).unwrap());
 }
