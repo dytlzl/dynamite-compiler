@@ -16,7 +16,14 @@ pub enum NodeType {
     Num,
     Ret
 }
+impl Default for NodeType {
+    fn default() -> Self {
+        Self::Num
+    }
+} 
 
+
+#[derive(Default)]
 pub struct Node {
     pub nt: NodeType,
     pub token: Option<Token>,
@@ -33,8 +40,7 @@ impl Node {
             nt,
             lhs: Some(Box::new(lhs)),
             rhs: Some(Box::new(rhs)),
-            value: 0,
-            offset: 0,
+            ..Self::default()
         }
     }
     pub fn new_with_op_and_lhs(token: Option<Token>, nt: NodeType, lhs: Node) -> Self {
@@ -42,29 +48,23 @@ impl Node {
             token,
             nt,
             lhs: Some(Box::new(lhs)),
-            rhs: None,
-            value: 0,
-            offset: 0,
+            ..Self::default()
         }
     }
     pub fn new_with_num(token: Option<Token>, value: usize) -> Self {
         Self {
             token,
             nt: NodeType::Num,
-            lhs: None,
-            rhs: None,
             value,
-            offset: 0,
+            ..Self::default()
         }
     }
     pub fn new_with_ident(token: Option<Token>, nt: NodeType, offset: usize) -> Self {
         Self {
             token,
             nt,
-            lhs: None,
-            rhs: None,
-            value: 0,
             offset,
+            ..Self::default()
         }
     }
     pub fn format(&self) -> String {
