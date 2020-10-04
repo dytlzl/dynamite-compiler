@@ -81,8 +81,26 @@ impl<'a> AstBuilder<'a> {
             self.expect("(");
             let cond = self.expr();
             self.expect(")");
-            let then = self.stmt();
-            return Node::new_while_node(Some(t), cond, then)
+            return Node::new_while_node(Some(t), cond, self.stmt())
+        }
+        if let Some(t) = self.consume_reserved("for") {
+            self.expect("(");
+            let mut ini: Option<Node> = None;
+            let mut cond: Option<Node> = None;
+            let mut upd: Option<Node> = None;
+            if let None = self.consume_reserved(";") {
+                ini = Some(self.expr());
+                self.expect(";");
+            }
+            if let None = self.consume_reserved(";") {
+                cond = Some(self.expr());
+                self.expect(";");
+            }
+            if let None = self.consume_reserved(")") {
+                upd = Some(self.expr());
+                self.expect(")");
+            }
+            return Node::new_for_node(Some(t), ini, cond, upd, self.stmt());
         }
         let node = if let Some(t) = self.consume_reserved("return") {
             Node::new_with_op_and_lhs(Some(t), NodeType::Ret, self.expr())

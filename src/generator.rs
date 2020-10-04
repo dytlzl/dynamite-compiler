@@ -53,33 +53,61 @@ impl<'a> AsmGenerator<'a> {
         Ok(())
     }
 
+    fn new_branch_num(&mut self) -> usize {
+        self.branch_count += 1;
+        self.branch_count
+    }
+
     fn gen_asm_with_node(&mut self, n: &Node) -> std::io::Result<()> {
         match n.nt {
             NodeType::If => {
-                self.branch_count += 1;
+                let branch_num = self.new_branch_num();
                 self.gen_asm_with_node(n.cond.as_ref().unwrap())?;
                 writeln!(self.buf, "  pop rax")?;
                 writeln!(self.buf, "  cmp rax, 0")?;
-                writeln!(self.buf, "  je .Lelse{}", self.branch_count)?;
+                writeln!(self.buf, "  je .Lelse{}", branch_num)?;
                 self.gen_asm_with_node(n.then.as_ref().unwrap())?;
-                writeln!(self.buf, "  jmp .Lend{}", self.branch_count)?;
-                writeln!(self.buf, ".Lelse{}:", self.branch_count)?;
+                writeln!(self.buf, "  jmp .Lend{}", branch_num)?;
+                writeln!(self.buf, ".Lelse{}:", branch_num)?;
                 if let Some(_) = n.els {
                     self.gen_asm_with_node(n.els.as_ref().unwrap())?;
                 }
-                writeln!(self.buf, ".Lend{}:", self.branch_count)?;
+                writeln!(self.buf, ".Lend{}:", branch_num)?;
                 return Ok(())
             }
             NodeType::Whl => {
-                self.branch_count += 1;
-                writeln!(self.buf, ".Lbegin{}:", self.branch_count)?;
+                let branch_num = self.new_branch_num();
+                writeln!(self.buf, ".Lbegin{}:", branch_num)?;
                 self.gen_asm_with_node(n.cond.as_ref().unwrap())?;
                 writeln!(self.buf, "  pop rax")?;
                 writeln!(self.buf, "  cmp rax, 0")?;
-                writeln!(self.buf, "  je .Lend{}", self.branch_count)?;
+                writeln!(self.buf, "  je .Lend{}", branch_num)?;
                 self.gen_asm_with_node(n.then.as_ref().unwrap())?;
-                writeln!(self.buf, "  jmp .Lbegin{}", self.branch_count)?;
-                writeln!(self.buf, ".Lend{}:", self.branch_count)?;
+                writeln!(self.buf, "  jmp .Lbegin{}", branch_num)?;
+                writeln!(self.buf, ".Lend{}:", branch_num)?;
+                return Ok(())
+            }
+            NodeType::For => {
+                let branch_num = self.new_branch_num();
+                if let Some(_) = n.ini {
+                    self.gen_asm_with_node(n.ini.as_ref().unwrap())?;
+                    writeln!(self.buf, "  pop rax")?;
+                }
+                writeln!(self.buf, ".Lbegin{}:", branch_num)?;
+                if let Some(_) = n.cond {
+                    self.gen_asm_with_node(n.cond.as_ref().unwrap())?;
+                    writeln!(self.buf, "  pop rax")?;
+                } else {
+                    writeln!(self.buf, "  mov rax, 1")?;
+                }
+                writeln!(self.buf, "  cmp rax, 0")?;
+                writeln!(self.buf, "  je .Lend{}", branch_num)?;
+                self.gen_asm_with_node(n.then.as_ref().unwrap())?;
+                if let Some(_) = n.upd {
+                    self.gen_asm_with_node(n.upd.as_ref().unwrap())?;
+                }
+                writeln!(self.buf, "  jmp .Lbegin{}", branch_num)?;
+                writeln!(self.buf, ".Lend{}:", branch_num)?;
                 return Ok(())
             }
             NodeType::Ret => {

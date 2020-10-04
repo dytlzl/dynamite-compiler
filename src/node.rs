@@ -17,12 +17,13 @@ pub enum NodeType {
     Ret,
     If,
     Whl,
+    For,
 }
 impl Default for NodeType {
     fn default() -> Self {
         Self::Num
     }
-} 
+}
 
 
 #[derive(Default)]
@@ -34,6 +35,8 @@ pub struct Node {
     pub cond: Option<Box<Node>>,
     pub then: Option<Box<Node>>,
     pub els: Option<Box<Node>>,
+    pub ini: Option<Box<Node>>,
+    pub upd: Option<Box<Node>>,
     pub value: usize,
     pub offset: usize,
 }
@@ -87,6 +90,17 @@ impl Node {
             token,
             nt: NodeType::Whl,
             cond: Some(Box::new(cond)),
+            then: Some(Box::new(then)),
+            ..Self::default()
+        }
+    }
+    pub fn new_for_node(token: Option<Token>, ini: Option<Node>, cond: Option<Node>, upd: Option<Node>, then: Node) -> Self {
+        Self {
+            token,
+            nt: NodeType::For,
+            ini: if let Some(d) = ini { Some(Box::new(d)) } else { None },
+            cond: if let Some(d) = cond { Some(Box::new(d)) } else { None },
+            upd: if let Some(d) = upd { Some(Box::new(d)) } else { None },
             then: Some(Box::new(then)),
             ..Self::default()
         }
