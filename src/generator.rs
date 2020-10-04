@@ -113,9 +113,9 @@ impl<'a> AsmGenerator<'a> {
                 };
                 writeln!(
                     self.buf,
-                     "cmp rax, rdi\n  {} al\n  {} rax, al",
-                     command,
-                     if let Os::MacOS = self.target_os { "movzx" } else { "movzb" })?;
+                    "cmp rax, rdi\n  {} al\n  {} rax, al",
+                    command,
+                    if let Os::MacOS = self.target_os { "movzx" } else { "movzb" })?;
             }
             _ => {
                 error("unexpected node");

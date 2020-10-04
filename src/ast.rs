@@ -44,8 +44,9 @@ impl<'a> AstBuilder<'a> {
     }
     fn expect_number(&mut self) -> Token {
         if let TokenType::Num = self.tokens[self.cur].tt {} else {
-            error_at(self.code, self.tokens[self.cur].pos,
-                     &format!("expected number, but got {}", &self.tokens[self.cur].s_value))
+            error_at(
+                self.code, self.tokens[self.cur].pos,
+                &format!("expected number, but got {}", &self.tokens[self.cur].s_value))
         }
         self.cur += 1;
         self.tokens[self.cur-1].clone()
