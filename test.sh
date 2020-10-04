@@ -14,8 +14,15 @@ assert() {
     exit 1
   fi
 }
+if [ ! -d ./asm ]; then
+  mkdir ./asm
+fi
+if [ ! -d ./bin ]; then
+  mkdir ./bin
+fi
 << CMT
 CMT
+
 assert 42 '42;'
 assert 28 '3 * (29 % (13-2) + 3) - 2;'
 assert 10 '-1* 4+2*+7;'; # unary
