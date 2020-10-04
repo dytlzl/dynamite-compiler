@@ -6,7 +6,13 @@ pub enum TokenType {
     Eof,
 }
 
-#[derive(Debug, Clone)]
+impl Default for TokenType {
+    fn default() -> Self {
+        Self::Num
+    }
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct Token {
     pub tt: TokenType,
     pub pos: usize,

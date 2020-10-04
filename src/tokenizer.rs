@@ -9,7 +9,37 @@ impl Tokenizer {
     pub fn new() -> Self {
         Self { tokens: Vec::new() }
     }
-    pub fn tokenize(&mut self, code: &str) {
+    pub fn push_reserved_token(&mut self, pos: usize, s_value: String) {
+        self.tokens.push(
+            Token {
+                tt: TokenType::Reserved,
+                pos,
+                s_value,
+                ..Token::default()
+            }
+        );
+    }
+    pub fn push_num_token(&mut self, pos: usize, i_value: usize) {
+        self.tokens.push(
+            Token {
+                tt: TokenType::Num,
+                pos,
+                i_value,
+                ..Token::default()
+            }
+        );
+    }
+    pub fn push_ident_token(&mut self, pos: usize, s_value: String) {
+        self.tokens.push(
+            Token {
+                tt: TokenType::Ident,
+                pos,
+                s_value,
+                ..Token::default()
+            }
+        );
+    }
+    pub fn tokenize(&mut self, code: &str) {	
         let chars: Vec<(usize, char)> = code.char_indices().map(
             |(pos, ch)| { (pos, ch) }).collect();
         let mut i = 0;
@@ -20,12 +50,7 @@ impl Tokenizer {
                 }
                 '+' | '-' | '*' | '/' | '%' | '(' | ')' | ';' => {
                     let pos = chars[i].0;
-                    self.tokens.push(Token {
-                        tt: TokenType::Reserved,
-                        pos,
-                        i_value: 0,
-                        s_value: String::from(chars[i].1),
-                    });
+                    self.push_reserved_token(pos, String::from(chars[i].1));
                     i += 1;
                 }
                 '<' | '>' => {
@@ -35,21 +60,11 @@ impl Tokenizer {
                     match chars[i].1 {
                         '=' => {
                             temp.push(chars[i].1);
-                            self.tokens.push(Token {
-                                tt: TokenType::Reserved,
-                                pos,
-                                i_value: 0,
-                                s_value: temp,
-                            });
+                            self.push_reserved_token(pos, temp);
                             i += 1;
                         }
                         _ => {
-                            self.tokens.push(Token {
-                                tt: TokenType::Reserved,
-                                pos,
-                                i_value: 0,
-                                s_value: temp,
-                            })
+                            self.push_reserved_token(pos, temp);
                         }
                     }
                 }
@@ -64,12 +79,7 @@ impl Tokenizer {
                         }
                         _ => {}
                     }
-                    self.tokens.push(Token {
-                        tt: TokenType::Reserved,
-                        pos,
-                        i_value: 0,
-                        s_value: temp,
-                    })
+                    self.push_reserved_token(pos, temp);
                 }
                 '!' => {
                     let pos = chars[i].0;
@@ -84,12 +94,7 @@ impl Tokenizer {
                             error_at(code, i, "unexpected_character")
                         }
                     }
-                    self.tokens.push(Token {
-                        tt: TokenType::Reserved,
-                        pos,
-                        i_value: 0,
-                        s_value: temp,
-                    })
+                    self.push_reserved_token(pos, temp);
                 }
                 '0'..='9' => {
                     let pos = chars[i].0;
@@ -106,12 +111,7 @@ impl Tokenizer {
                             }
                         }
                     }
-                    self.tokens.push(Token {
-                        tt: TokenType::Num,
-                        pos,
-                        i_value: temp,
-                        s_value: String::new(),
-                    })
+                    self.push_num_token(pos, temp);
                 }
                 'a'..='z' => {
                     let pos = chars[i].0;
@@ -129,19 +129,9 @@ impl Tokenizer {
                         }
                     }
                     if &temp[..] == "return" {
-                        self.tokens.push(Token {
-                            tt: TokenType::Reserved,
-                            pos,
-                            i_value: 0,
-                            s_value: temp,
-                        })
+                        self.push_reserved_token(pos, temp);
                     } else {
-                        self.tokens.push(Token {
-                            tt: TokenType::Ident,
-                            pos,
-                            i_value: 0,
-                            s_value: temp,
-                        })
+                        self.push_ident_token(pos, temp);
                     }
                 }
                 _ => {
