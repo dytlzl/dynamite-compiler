@@ -16,6 +16,7 @@ pub enum NodeType {
     Num,
     Ret,
     If,
+    Whl,
 }
 impl Default for NodeType {
     fn default() -> Self {
@@ -71,13 +72,22 @@ impl Node {
             ..Self::default()
         }
     }
-    pub fn new_if_node(token: Option<Token>, cond: Node, then: Node, els: Option<Node>) -> Self{
+    pub fn new_if_node(token: Option<Token>, cond: Node, then: Node, els: Option<Node>) -> Self {
         Self {
             token,
             nt: NodeType::If,
             cond: Some(Box::new(cond)),
             then: Some(Box::new(then)),
             els: if let Some(els) = els { Some(Box::new(els)) } else { None },
+            ..Self::default()
+        }
+    }
+    pub fn new_while_node(token: Option<Token>, cond: Node, then: Node) -> Self {
+        Self {
+            token,
+            nt: NodeType::Whl,
+            cond: Some(Box::new(cond)),
+            then: Some(Box::new(then)),
             ..Self::default()
         }
     }
@@ -104,6 +114,12 @@ impl Node {
                         } else {
                             String::from("None")
                         })
+            }
+            NodeType::Whl => {
+                format!("{:?}({}, {})",
+                        self.nt,
+                        self.cond.as_ref().map(|n| n.format()).unwrap(),
+                        self.then.as_ref().map(|n| n.format()).unwrap())
             }
             _ => {
                 format!("{:?}({}, {})",

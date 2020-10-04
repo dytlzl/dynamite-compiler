@@ -70,6 +70,18 @@ impl<'a> AsmGenerator<'a> {
                 writeln!(self.buf, ".Lend{}:", self.branch_count)?;
                 return Ok(())
             }
+            NodeType::Whl => {
+                self.branch_count += 1;
+                writeln!(self.buf, ".Lbegin{}:", self.branch_count)?;
+                self.gen_asm_with_node(n.cond.as_ref().unwrap())?;
+                writeln!(self.buf, "  pop rax")?;
+                writeln!(self.buf, "  cmp rax, 0")?;
+                writeln!(self.buf, "  je .Lend{}", self.branch_count)?;
+                self.gen_asm_with_node(n.then.as_ref().unwrap())?;
+                writeln!(self.buf, "  jmp .Lbegin{}", self.branch_count)?;
+                writeln!(self.buf, ".Lend{}:", self.branch_count)?;
+                return Ok(())
+            }
             NodeType::Ret => {
                 self.gen_asm_with_node(n.lhs.as_ref().unwrap())?;
                 writeln!(self.buf, "  pop rax")?;

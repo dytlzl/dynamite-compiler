@@ -77,6 +77,13 @@ impl<'a> AstBuilder<'a> {
             }
             return Node::new_if_node(Some(t), cond, then, els)
         }
+        if let Some(t) = self.consume_reserved("while") {
+            self.expect("(");
+            let cond = self.expr();
+            self.expect(")");
+            let then = self.stmt();
+            return Node::new_while_node(Some(t), cond, then)
+        }
         let node = if let Some(t) = self.consume_reserved("return") {
             Node::new_with_op_and_lhs(Some(t), NodeType::Ret, self.expr())
         } else {

@@ -37,6 +37,7 @@ assert 31 'ice=3; cream=7; ice*cream+ice+cream;'
 assert 66 'a=47; b=19; return a+b; a%b;'
 assert 5 'if (3*6>15) 5; else 10;'
 assert 7 'x = 5; if (x > 4) x = x+5; x-3;'
+assert 12 'a = 3; while (a*a < 100) a=a+3; a;'
 
 
 echo OK

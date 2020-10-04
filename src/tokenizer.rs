@@ -1,7 +1,7 @@
 use crate::token::{Token, TokenType};
 use crate::error::error_at;
 
-const RESERVED_WORDS: [&str; 3] = ["return", "if", "else"];
+const RESERVED_WORDS: [&str; 4] = ["return", "if", "else", "while"];
 
 pub struct Tokenizer {
     pub tokens: Vec<Token>,
