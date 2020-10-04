@@ -14,7 +14,8 @@ pub enum NodeType {
     Lt,
     Le,
     Num,
-    Ret
+    Ret,
+    If,
 }
 impl Default for NodeType {
     fn default() -> Self {
@@ -29,6 +30,9 @@ pub struct Node {
     pub token: Option<Token>,
     pub lhs: Option<Box<Node>>,
     pub rhs: Option<Box<Node>>,
+    pub cond: Option<Box<Node>>,
+    pub then: Option<Box<Node>>,
+    pub els: Option<Box<Node>>,
     pub value: usize,
     pub offset: usize,
 }
@@ -67,6 +71,16 @@ impl Node {
             ..Self::default()
         }
     }
+    pub fn new_if_node(token: Option<Token>, cond: Node, then: Node, els: Option<Node>) -> Self{
+        Self {
+            token,
+            nt: NodeType::If,
+            cond: Some(Box::new(cond)),
+            then: Some(Box::new(then)),
+            els: if let Some(els) = els { Some(Box::new(els)) } else { None },
+            ..Self::default()
+        }
+    }
     pub fn format(&self) -> String {
         match self.nt {
             NodeType::Num => {
@@ -79,6 +93,17 @@ impl Node {
                 format!("{:?}({})",
                         self.nt,
                         self.lhs.as_ref().map(|n| n.format()).unwrap())
+            }
+            NodeType::If => {
+                format!("{:?}({}, {}, {})",
+                        self.nt,
+                        self.cond.as_ref().map(|n| n.format()).unwrap(),
+                        self.then.as_ref().map(|n| n.format()).unwrap(),
+                        if let Some(_) = self.els {
+                            self.els.as_ref().map(|n| n.format()).unwrap()
+                        } else {
+                            String::from("None")
+                        })
             }
             _ => {
                 format!("{:?}({}, {})",

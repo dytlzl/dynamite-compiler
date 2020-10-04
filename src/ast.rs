@@ -66,6 +66,17 @@ impl<'a> AstBuilder<'a> {
         v
     }
     fn stmt(&mut self) -> Node {
+        if let Some(t) = self.consume_reserved("if") {
+            self.expect("(");
+            let cond = self.expr();
+            self.expect(")");
+            let then = self.stmt();
+            let mut els: Option<Node> = None;
+            if let Some(_) = self.consume_reserved("else") {
+                els = Some(self.stmt());
+            }
+            return Node::new_if_node(Some(t), cond, then, els)
+        }
         let node = if let Some(t) = self.consume_reserved("return") {
             Node::new_with_op_and_lhs(Some(t), NodeType::Ret, self.expr())
         } else {

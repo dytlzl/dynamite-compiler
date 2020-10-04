@@ -1,6 +1,8 @@
 use crate::token::{Token, TokenType};
 use crate::error::error_at;
 
+const RESERVED_WORDS: [&str; 3] = ["return", "if", "else"];
+
 pub struct Tokenizer {
     pub tokens: Vec<Token>,
 }
@@ -128,7 +130,7 @@ impl Tokenizer {
                             }
                         }
                     }
-                    if &temp[..] == "return" {
+                    if RESERVED_WORDS.contains(&&temp[..]) {
                         self.push_reserved_token(pos, temp);
                     } else {
                         self.push_ident_token(pos, temp);
@@ -139,12 +141,14 @@ impl Tokenizer {
                 }
             }
         }
-        self.tokens.push(Token {
-            tt: TokenType::Eof,
-            pos: chars.len(),
-            i_value: 0,
-            s_value: String::new(),
-        })
+        self.tokens.push(
+            Token {
+                tt: TokenType::Eof,
+                pos: chars.len(),
+                i_value: 0,
+                s_value: String::new(),
+            }
+        )
     }
     pub fn print_tokens(&self) {
         self.tokens.iter().for_each(|t| {

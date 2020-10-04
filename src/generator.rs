@@ -6,6 +6,7 @@ pub struct AsmGenerator<'a> {
     pub buf: Vec<u8>,
     node_stream: &'a Vec<Node>,
     target_os: Os,
+    branch_count: usize,
 }
 
 pub enum Os {
@@ -15,7 +16,7 @@ pub enum Os {
 
 impl<'a> AsmGenerator<'a> {
     pub fn new(node_stream: &'a Vec<Node>, target_os: Os) -> Self {
-        Self { buf: Vec::new(), node_stream, target_os }
+        Self { buf: Vec::new(), node_stream, target_os, branch_count: 0 }
     }
 
     pub fn gen_asm(&mut self, stack_size: usize) -> std::io::Result<()> {
@@ -54,6 +55,21 @@ impl<'a> AsmGenerator<'a> {
 
     fn gen_asm_with_node(&mut self, n: &Node) -> std::io::Result<()> {
         match n.nt {
+            NodeType::If => {
+                self.branch_count += 1;
+                self.gen_asm_with_node(n.cond.as_ref().unwrap())?;
+                writeln!(self.buf, "  pop rax")?;
+                writeln!(self.buf, "  cmp rax, 0")?;
+                writeln!(self.buf, "  je .Lelse{}", self.branch_count)?;
+                self.gen_asm_with_node(n.then.as_ref().unwrap())?;
+                writeln!(self.buf, "  jmp .Lend{}", self.branch_count)?;
+                writeln!(self.buf, ".Lelse{}:", self.branch_count)?;
+                if let Some(_) = n.els {
+                    self.gen_asm_with_node(n.els.as_ref().unwrap())?;
+                }
+                writeln!(self.buf, ".Lend{}:", self.branch_count)?;
+                return Ok(())
+            }
             NodeType::Ret => {
                 self.gen_asm_with_node(n.lhs.as_ref().unwrap())?;
                 writeln!(self.buf, "  pop rax")?;
