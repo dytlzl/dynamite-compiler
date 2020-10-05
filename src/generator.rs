@@ -1,12 +1,15 @@
 use std::io::Write;
 use crate::node::{Node, NodeType};
-use crate::error::error;
+use crate::error::{error, error_at};
+use std::collections::VecDeque;
 
 pub struct AsmGenerator<'a> {
+    code: &'a str,
     pub buf: Vec<u8>,
     node_stream: &'a Vec<Node>,
     target_os: Os,
     branch_count: usize,
+    loop_stack: VecDeque<usize>,
 }
 
 pub enum Os {
@@ -15,8 +18,15 @@ pub enum Os {
 }
 
 impl<'a> AsmGenerator<'a> {
-    pub fn new(node_stream: &'a Vec<Node>, target_os: Os) -> Self {
-        Self { buf: Vec::new(), node_stream, target_os, branch_count: 0 }
+    pub fn new(code: &'a str, node_stream: &'a Vec<Node>, target_os: Os) -> Self {
+        Self {
+            code,
+            buf: Vec::new(),
+            node_stream,
+            target_os,
+            branch_count: 0,
+            loop_stack: VecDeque::new(),
+        }
     }
 
     pub fn gen_asm(&mut self, stack_size: usize) -> std::io::Result<()> {
@@ -77,6 +87,7 @@ impl<'a> AsmGenerator<'a> {
             }
             NodeType::Whl => {
                 let branch_num = self.new_branch_num();
+                self.loop_stack.push_back(branch_num);
                 writeln!(self.buf, ".Lbegin{}:", branch_num)?;
                 self.gen_asm_with_node(n.cond.as_ref().unwrap())?;
                 writeln!(self.buf, "  pop rax")?;
@@ -85,10 +96,12 @@ impl<'a> AsmGenerator<'a> {
                 self.gen_asm_with_node(n.then.as_ref().unwrap())?;
                 writeln!(self.buf, "  jmp .Lbegin{}", branch_num)?;
                 writeln!(self.buf, ".Lend{}:", branch_num)?;
+                self.loop_stack.pop_back();
                 return Ok(())
             }
             NodeType::For => {
                 let branch_num = self.new_branch_num();
+                self.loop_stack.push_back(branch_num);
                 if let Some(_) = n.ini {
                     self.gen_asm_with_node(n.ini.as_ref().unwrap())?;
                     writeln!(self.buf, "  pop rax")?;
@@ -108,7 +121,16 @@ impl<'a> AsmGenerator<'a> {
                 }
                 writeln!(self.buf, "  jmp .Lbegin{}", branch_num)?;
                 writeln!(self.buf, ".Lend{}:", branch_num)?;
+                self.loop_stack.pop_back();
                 return Ok(())
+            }
+            NodeType::Brk => {
+                if let Some(branch_num) = self.loop_stack.back() {
+                    writeln!(self.buf, "  jmp .Lend{}", branch_num)?;
+                } else {
+                    error_at(self.code, n.token.as_ref().unwrap().pos, "unexpected break found");
+                }
+                return Ok(());
             }
             NodeType::Ret => {
                 self.gen_asm_with_node(n.lhs.as_ref().unwrap())?;

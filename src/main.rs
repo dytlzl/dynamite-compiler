@@ -29,7 +29,7 @@ fn main() {
         }
         eprintln!("[asm]");
     }
-    let mut generator = AsmGenerator::new(&node_stream, Os::Linux);
+    let mut generator = AsmGenerator::new(code, &node_stream, Os::MacOS);
     generator.gen_asm(builder.offset_size).unwrap();
     print!("{}", String::from_utf8(generator.buf).unwrap());
 }

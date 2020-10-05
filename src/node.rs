@@ -18,6 +18,7 @@ pub enum NodeType {
     If,
     Whl,
     For,
+    Brk,
 }
 impl Default for NodeType {
     fn default() -> Self {
@@ -118,6 +119,9 @@ impl Node {
                         self.nt,
                         self.lhs.as_ref().map(|n| n.format()).unwrap())
             }
+            NodeType::Brk => {
+                format!("{:?}", self.nt)
+            }
             NodeType::If => {
                 format!("{:?}({}, {}, {})",
                         self.nt,
@@ -135,12 +139,27 @@ impl Node {
                         self.cond.as_ref().map(|n| n.format()).unwrap(),
                         self.then.as_ref().map(|n| n.format()).unwrap())
             }
+            NodeType::For => {
+                format!("{:?}({}, {}, {}, {})",
+                        self.nt,
+                        Self::format_optional_node(self.ini.as_ref()),
+                        Self::format_optional_node(self.cond.as_ref()),
+                        Self::format_optional_node(self.upd.as_ref()),
+                        Self::format_optional_node(self.then.as_ref()))
+            }
             _ => {
                 format!("{:?}({}, {})",
                         self.nt,
                         self.lhs.as_ref().map(|n| n.format()).unwrap(),
                         self.rhs.as_ref().map(|n| n.format()).unwrap())
             }
+        }
+    }
+    fn format_optional_node(n: Option<&Box<Node>>) -> String {
+        if let Some(_) = n {
+            n.map(|n| n.format()).unwrap()
+        } else {
+            String::from("None")
         }
     }
 }

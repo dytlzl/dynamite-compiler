@@ -39,6 +39,7 @@ assert 5 'if (3*6>15) 5; else 10;'
 assert 7 'x = 5; if (x > 4) x = x+5; x-3;'
 assert 12 'a = 3; while (a*a < 100) a=a+3; a;'
 assert 45 'a = 0; for(i = 0; i < 10; i = i+1) a = a+i;a;'
+assert 12 'a = 0; for (;; a = a+3) if (a >= 10) break; return a;'
 
 
 echo OK

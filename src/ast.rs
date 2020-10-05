@@ -102,7 +102,13 @@ impl<'a> AstBuilder<'a> {
             }
             return Node::new_for_node(Some(t), ini, cond, upd, self.stmt());
         }
-        let node = if let Some(t) = self.consume_reserved("return") {
+        let node = if let Some(t) = self.consume_reserved("break") {
+            Node {
+                token: Some(t),
+                nt: NodeType::Brk,
+                ..Node::default()
+            }
+        } else if let Some(t) = self.consume_reserved("return") {
             Node::new_with_op_and_lhs(Some(t), NodeType::Ret, self.expr())
         } else {
             self.expr()
