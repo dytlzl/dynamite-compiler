@@ -19,7 +19,7 @@ impl<'a> AstBuilder<'a> {
         if let TokenType::Reserved = self.tokens[self.cur].tt {
             if self.tokens[self.cur].s_value == s_value {
                 self.cur += 1;
-                return Some(self.tokens[self.cur-1].clone());
+                return Some(self.tokens[self.cur - 1].clone());
             }
         }
         None
@@ -27,7 +27,7 @@ impl<'a> AstBuilder<'a> {
     fn consume_ident(&mut self) -> Option<Token> {
         if let TokenType::Ident = self.tokens[self.cur].tt {
             self.cur += 1;
-            return Some(self.tokens[self.cur-1].clone());
+            return Some(self.tokens[self.cur - 1].clone());
         } else {
             None
         }
@@ -36,7 +36,7 @@ impl<'a> AstBuilder<'a> {
         if let TokenType::Reserved = self.tokens[self.cur].tt {
             if self.tokens[self.cur].s_value == s_value {
                 self.cur += 1;
-                return self.tokens[self.cur-1].clone();
+                return self.tokens[self.cur - 1].clone();
             }
         }
         error_at(self.code, self.tokens[self.cur].pos, "unexpected token");
@@ -49,7 +49,7 @@ impl<'a> AstBuilder<'a> {
                 &format!("expected number, but got {}", &self.tokens[self.cur].s_value))
         }
         self.cur += 1;
-        self.tokens[self.cur-1].clone()
+        self.tokens[self.cur - 1].clone()
     }
     fn at_eof(&self) -> bool {
         if let TokenType::Eof = self.tokens[self.cur].tt {
@@ -75,13 +75,13 @@ impl<'a> AstBuilder<'a> {
             if let Some(_) = self.consume_reserved("else") {
                 els = Some(self.stmt());
             }
-            return Node::new_if_node(Some(t), cond, then, els)
+            return Node::new_if_node(Some(t), cond, then, els);
         }
         if let Some(t) = self.consume_reserved("while") {
             self.expect("(");
             let cond = self.expr();
             self.expect(")");
-            return Node::new_while_node(Some(t), cond, self.stmt())
+            return Node::new_while_node(Some(t), cond, self.stmt());
         }
         if let Some(t) = self.consume_reserved("for") {
             self.expect("(");
@@ -101,6 +101,18 @@ impl<'a> AstBuilder<'a> {
                 self.expect(")");
             }
             return Node::new_for_node(Some(t), ini, cond, upd, self.stmt());
+        }
+        if let Some(t) = self.consume_reserved("{") {
+            let mut children: Vec<Node> = Vec::new();
+            while let None = self.consume_reserved("}") {
+                children.push(self.stmt());
+            }
+            return Node {
+                token: Some(t),
+                nt: NodeType::Block,
+                children,
+                ..Node::default()
+            };
         }
         let node = if let Some(t) = self.consume_reserved("break") {
             Node {
@@ -194,7 +206,7 @@ impl<'a> AstBuilder<'a> {
     }
     fn unary(&mut self) -> Node {
         if let Some(_) = self.consume_reserved("+") {} else if let Some(t) = self.consume_reserved("-") {
-            return Node::new_with_op(Some(t), NodeType::Sub, Node::new_with_num(None,0), self.prim());
+            return Node::new_with_op(Some(t), NodeType::Sub, Node::new_with_num(None, 0), self.prim());
         }
         self.prim()
     }

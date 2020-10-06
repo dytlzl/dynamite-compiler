@@ -34,12 +34,16 @@ assert 1 '124>=31*4;'
 assert 12 'a=3; b=4; a*b;'
 assert 1 'a=3; b=4; a*a*b==36;'
 assert 31 'ice=3; cream=7; ice*cream+ice+cream;'
+assert 27 'a=3; b = c = a; a*b*c;'
 assert 66 'a=47; b=19; return a+b; a%b;'
 assert 5 'if (3*6>15) 5; else 10;'
 assert 7 'x = 5; if (x > 4) x = x+5; x-3;'
 assert 12 'a = 3; while (a*a < 100) a=a+3; a;'
 assert 45 'a = 0; for(i = 0; i < 10; i = i+1) a = a+i;a;'
 assert 12 'a = 0; for (;; a = a+3) if (a >= 10) break; return a;'
+assert 50 'a = 0; for (i = 0; i < 10; i = i+1) { j = 0; while (j < 5) { a = a+1; j = j+1; } } return a;'
+assert 0 'for (i = 0; i < 1;) { break; } return i;'
+assert 50 'a = 0; for (i = 0; i < 10; i = i+1) { j = 0; while (1) { if (j>=5) break; a = a+1; j = j+1; } } return a;'
 
 
 echo OK

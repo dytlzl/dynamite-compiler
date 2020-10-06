@@ -19,6 +19,7 @@ pub enum NodeType {
     Whl,
     For,
     Brk,
+    Block,
 }
 impl Default for NodeType {
     fn default() -> Self {
@@ -38,6 +39,7 @@ pub struct Node {
     pub els: Option<Box<Node>>,
     pub ini: Option<Box<Node>>,
     pub upd: Option<Box<Node>>,
+    pub children: Vec<Node>,
     pub value: usize,
     pub offset: usize,
 }
@@ -112,7 +114,7 @@ impl Node {
                 format!("{}", self.value)
             }
             NodeType::LVar => {
-                format!("{:?}", self.nt)
+                format!("{:?}({})", self.nt, self.offset)
             }
             NodeType::Ret => {
                 format!("{:?}({})",
@@ -147,11 +149,21 @@ impl Node {
                         Self::format_optional_node(self.upd.as_ref()),
                         Self::format_optional_node(self.then.as_ref()))
             }
-            _ => {
+            NodeType::Block => {
+                String::from("{")+
+                    &self.children.iter().map(
+                        |n| {n.format()}).collect::<Vec<String>>().join(", ") +
+                    "}"
+            }
+            NodeType::Add | NodeType::Sub | NodeType::Mul | NodeType::Div | NodeType::Mod |
+            NodeType::Asg | NodeType::Lt | NodeType::Le => {
                 format!("{:?}({}, {})",
                         self.nt,
                         self.lhs.as_ref().map(|n| n.format()).unwrap(),
                         self.rhs.as_ref().map(|n| n.format()).unwrap())
+            }
+            _ => {
+                format!("{:?}", self.nt)
             }
         }
     }
