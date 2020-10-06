@@ -30,10 +30,14 @@ fn main() {
         }
         eprintln!("[asm]");
     }
-    let mut generator = AsmGenerator::new(code, &node_stream, Os::MacOS);
+    #[cfg(target_os = "linux")]
+        let target_os = Os::Linux;
+    #[cfg(target_os = "macos")]
+        let target_os = Os::MacOS;
+    let mut generator = AsmGenerator::new(code, &node_stream, target_os);
     generator.gen_asm(builder.offset_size).unwrap();
     let asm = String::from_utf8(generator.buf).unwrap();
-    if is_debug {
+    if is_debug { // in progress
         let lines = (&asm[..]).split("\n").collect::<Vec<_>>();
         let mut labels: HashMap<&str, usize> = HashMap::new();
         let mut stack: VecDeque<(usize, &str)> = VecDeque::new();
