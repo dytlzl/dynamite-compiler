@@ -128,7 +128,7 @@ impl Node {
                 }
             }
             NodeType::Deref => {
-                if let Some(Type::Ptr(ty)) = self.cty.clone() { Some(*ty) } else { unreachable!(); }
+                if let Some(Type::Ptr(ty)) = self.lhs.as_ref().unwrap().cty.clone() { Some(*ty) } else { unreachable!(); }
             }
             _ => {
                 if let Some(n) = self.lhs.as_ref() {

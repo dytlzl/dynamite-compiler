@@ -292,6 +292,14 @@ impl<'a> AstBuilder<'a> {
         }
     }
     fn unary(&mut self) -> Node {
+        if let Some(t) = self.consume_reserved("sizeof") {
+            return Node {
+                token: Some(t),
+                value: Some(self.unary().resolve_type().unwrap().size_of()),
+                cty: Some(Type::Int),
+                ..Node::default()
+            }
+        }
         if let Some(_) = self.consume_reserved("+") {} else if let Some(t) = self.consume_reserved("-") {
             return Node::new_with_op(Some(t), NodeType::Sub, Node::new_with_num(None, 0), self.prim());
         }
