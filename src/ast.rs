@@ -216,14 +216,25 @@ impl<'a> AstBuilder<'a> {
             self.expect(")");
             return node;
         } else if let Some(t) = self.consume_ident() {
-            if !self.offset_map.contains_key(&t.s_value) {
-                self.offset_size += 8;
+            if let Some(_) = self.consume_reserved("(") {
+                self.expect(")");
+                let s_value = t.s_value.clone();
+                return Node {
+                    token: Some(t),
+                    nt: NodeType::Cf,
+                    func_name: String::from(s_value),
+                    ..Node::default()
+                };
+            } else {
+                if !self.offset_map.contains_key(&t.s_value) {
+                    self.offset_size += 8;
+                }
+                let offset = *self.offset_map.entry(t.s_value.clone()).or_insert(self.offset_size);
+                return Node::new_with_ident(
+                    Some(t),
+                    NodeType::LVar,
+                    offset);
             }
-            let offset = *self.offset_map.entry(t.s_value.clone()).or_insert(self.offset_size);
-            return Node::new_with_ident(
-                Some(t),
-                NodeType::LVar,
-                offset);
         }
         let t = self.expect_number();
         let value = t.i_value;

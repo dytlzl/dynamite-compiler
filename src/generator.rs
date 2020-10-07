@@ -24,14 +24,14 @@ impl<'a> AsmGenerator<'a> {
             code,
             buf: Vec::new(),
             node_stream,
-            stack_size: (stack_size+15)/16*16, // stack size should be a multiple of 16
+            stack_size,
             target_os,
             branch_count: 0,
             loop_stack: VecDeque::new(),
         }
     }
 
-    pub fn gen_asm(&mut self) -> std::io::Result<()> {
+    pub fn gen(&mut self) -> std::io::Result<()> {
         writeln!(self.buf, ".intel_syntax noprefix")?;
         let entry_point = if let Os::MacOS = self.target_os { "_main" } else { "main" };
         writeln!(self.buf, ".globl {}", entry_point)?;
@@ -41,11 +41,7 @@ impl<'a> AsmGenerator<'a> {
         writeln!(self.buf, "  push rbp")?;
         writeln!(self.buf, "  mov rbp, rsp")?;
         writeln!(self.buf, "  sub rsp, {}", self.stack_size)?;
-        for node in self.node_stream {
-            self.reset_stack()?;
-            self.gen_asm_with_node(node)?;
-            self.pop_rax()?;
-        }
+        self.gen_with_vec(self.node_stream)?;
         self.epilogue()?;
         Ok(())
     }
@@ -57,113 +53,123 @@ impl<'a> AsmGenerator<'a> {
         Ok(())
     }
 
-    fn gen_asm_with_node(&mut self, n: &Node) -> std::io::Result<()> {
-        match n.nt {
+    fn gen_with_node(&mut self, node: &Node) -> std::io::Result<()> {
+        match node.nt {
+            NodeType::Cf => {
+                writeln!(self.buf, "  mov rax, rsp")?;
+                writeln!(self.buf, "  add rax, 8")?;
+                writeln!(self.buf, "  mov rdi, 16")?;
+                writeln!(self.buf, "  cqo\n  idiv rdi")?;
+                writeln!(self.buf, "  sub rsp, rdx")?;
+                writeln!(self.buf, "  push rdx")?;
+                writeln!(self.buf, "  call _{}", &node.func_name)?;
+                writeln!(self.buf, "  pop rdi")?;
+                writeln!(self.buf, "  add rsp, rdi")?;
+                self.push("rax")?;
+                return Ok(());
+            }
             NodeType::If => {
                 let branch_num = self.new_branch_num();
-                self.gen_asm_with_node(n.cond.as_ref().unwrap())?;
+                self.gen_with_node(node.cond.as_ref().unwrap())?;
                 self.pop_rax()?;
                 writeln!(self.buf, "  cmp rax, 0")?;
                 writeln!(self.buf, "  je .Lelse{}", branch_num)?;
-                self.gen_asm_with_node(n.then.as_ref().unwrap())?;
+                self.gen_with_node(node.then.as_ref().unwrap())?;
                 writeln!(self.buf, "  jmp .Lend{}", branch_num)?;
                 writeln!(self.buf, ".Lelse{}:", branch_num)?;
-                if let Some(_) = n.els {
-                    self.gen_asm_with_node(n.els.as_ref().unwrap())?;
+                if let Some(_) = node.els {
+                    self.gen_with_node(node.els.as_ref().unwrap())?;
                 }
                 writeln!(self.buf, ".Lend{}:", branch_num)?;
-                return Ok(())
+                return Ok(());
             }
             NodeType::Whl => {
                 let branch_num = self.new_branch_num();
                 self.loop_stack.push_back(branch_num);
                 writeln!(self.buf, ".Lbegin{}:", branch_num)?;
                 self.reset_stack()?;
-                self.gen_asm_with_node(n.cond.as_ref().unwrap())?;
+                self.gen_with_node(node.cond.as_ref().unwrap())?;
                 self.pop_rax()?;
                 writeln!(self.buf, "  cmp rax, 0")?;
                 writeln!(self.buf, "  je .Lend{}", branch_num)?;
-                self.gen_asm_with_node(n.then.as_ref().unwrap())?;
+                self.gen_with_node(node.then.as_ref().unwrap())?;
                 writeln!(self.buf, "  jmp .Lbegin{}", branch_num)?;
                 writeln!(self.buf, ".Lend{}:", branch_num)?;
                 self.loop_stack.pop_back();
-                return Ok(())
+                return Ok(());
             }
             NodeType::For => {
                 let branch_num = self.new_branch_num();
                 self.loop_stack.push_back(branch_num);
-                if let Some(_) = n.ini {
-                    self.gen_asm_with_node(n.ini.as_ref().unwrap())?;
+                if let Some(_) = node.ini {
+                    self.gen_with_node(node.ini.as_ref().unwrap())?;
                     self.pop_rax()?;
                 }
                 writeln!(self.buf, ".Lbegin{}:", branch_num)?;
                 self.reset_stack()?;
-                if let Some(_) = n.cond {
-                    self.gen_asm_with_node(n.cond.as_ref().unwrap())?;
+                if let Some(_) = node.cond {
+                    self.gen_with_node(node.cond.as_ref().unwrap())?;
                     self.pop_rax()?;
                 } else {
                     writeln!(self.buf, "  mov rax, 1")?;
                 }
                 writeln!(self.buf, "  cmp rax, 0")?;
                 writeln!(self.buf, "  je .Lend{}", branch_num)?;
-                self.gen_asm_with_node(n.then.as_ref().unwrap())?;
-                if let Some(_) = n.upd {
-                    self.gen_asm_with_node(n.upd.as_ref().unwrap())?;
+                self.gen_with_node(node.then.as_ref().unwrap())?;
+                if let Some(_) = node.upd {
+                    self.gen_with_node(node.upd.as_ref().unwrap())?;
                     self.pop_rax()?;
                 }
                 writeln!(self.buf, "  jmp .Lbegin{}", branch_num)?;
                 writeln!(self.buf, ".Lend{}:", branch_num)?;
                 self.loop_stack.pop_back();
-                return Ok(())
+                return Ok(());
             }
             NodeType::Block => {
-                for child in &n.children {
-                    self.reset_stack()?;
-                    self.gen_asm_with_node(child)?;
-                }
-                return Ok(())
+                self.gen_with_vec(&node.children)?;
+                return Ok(());
             }
             NodeType::Brk => {
                 if let Some(branch_num) = self.loop_stack.back() {
                     writeln!(self.buf, "  jmp .Lend{}", branch_num)?;
                 } else {
-                    error_at(self.code, n.token.as_ref().unwrap().pos, "unexpected break found");
+                    error_at(self.code, node.token.as_ref().unwrap().pos, "unexpected break found");
                 }
                 return Ok(());
             }
             NodeType::Ret => {
-                self.gen_asm_with_node(n.lhs.as_ref().unwrap())?;
+                self.gen_with_node(node.lhs.as_ref().unwrap())?;
                 self.pop_rax()?;
                 self.epilogue()?;
                 return Ok(());
             }
             NodeType::Num => {
-                self.push_value(n.value)?;
+                self.push(node.value)?;
                 return Ok(());
             }
             NodeType::LVar => {
-                self.gen_asm_with_local_variable(n)?;
+                self.gen_with_local_variable(node)?;
                 self.pop_rax()?;
                 writeln!(self.buf, "  mov rax, [rax]")?;
-                self.push_value("rax")?;
-                return Ok(())
+                self.push("rax")?;
+                return Ok(());
             }
             NodeType::Asg => {
-                self.gen_asm_with_local_variable(n.lhs.as_ref().unwrap())?;
-                self.gen_asm_with_node(n.rhs.as_ref().unwrap())?;
+                self.gen_with_local_variable(node.lhs.as_ref().unwrap())?;
+                self.gen_with_node(node.rhs.as_ref().unwrap())?;
                 self.pop_rdi()?;
                 self.pop_rax()?;
                 writeln!(self.buf, "  mov [rax], rdi")?;
-                self.push_value("rdi")?;
-                return Ok(())
+                self.push("rdi")?;
+                return Ok(());
             }
             _ => {}
         }
-        self.gen_asm_with_node(n.lhs.as_ref().unwrap())?;
-        self.gen_asm_with_node(n.rhs.as_ref().unwrap())?;
+        self.gen_with_node(node.lhs.as_ref().unwrap())?;
+        self.gen_with_node(node.rhs.as_ref().unwrap())?;
         self.pop_rdi()?;
         self.pop_rax()?;
-        match n.nt {
+        match node.nt {
             NodeType::Add => {
                 writeln!(self.buf, "  add rax, rdi")?;
             }
@@ -178,14 +184,14 @@ impl<'a> AsmGenerator<'a> {
             }
             NodeType::Mod => {
                 writeln!(self.buf, "  cqo\n  idiv rdi")?;
-                self.push_value("rdx")?;
+                self.push("rdx")?;
                 return Ok(());
             }
             NodeType::Eq | NodeType::Ne | NodeType::Lt | NodeType::Le => {
                 writeln!(
                     self.buf,
                     "  cmp rax, rdi\n  {} al\n  {} rax, al",
-                    match n.nt {
+                    match node.nt {
                         NodeType::Eq => "sete",
                         NodeType::Ne => "setne",
                         NodeType::Lt => "setl",
@@ -198,11 +204,20 @@ impl<'a> AsmGenerator<'a> {
                 error("unexpected node");
             }
         }
-        self.push_value("rax")?;
+        self.push("rax")?;
         Ok(())
     }
 
-    fn gen_asm_with_local_variable(&mut self, n: &Node) -> std::io::Result<()> {
+    fn gen_with_vec(&mut self, v: &Vec<Node>) -> std::io::Result<()> {
+        for node in v {
+            self.gen_with_node(node)?;
+            self.pop_rax()?;
+            self.reset_stack()?;
+        }
+        Ok(())
+    }
+
+    fn gen_with_local_variable(&mut self, n: &Node) -> std::io::Result<()> {
         writeln!(self.buf, "  mov rax, rbp")?;
         assert_ne!(n.offset, 0);
         writeln!(self.buf, "  sub rax, {}", n.offset)?;
@@ -225,7 +240,7 @@ impl<'a> AsmGenerator<'a> {
         Ok(())
     }
 
-    fn push_value<T: std::fmt::Display>(&mut self, v: T) -> std::io::Result<()> {
+    fn push<T: std::fmt::Display>(&mut self, v: T) -> std::io::Result<()> {
         writeln!(self.buf, "  push {}", v)?;
         Ok(())
     }
@@ -251,5 +266,4 @@ L_.str:                                 ## @.str
   .asciz "value = %d\n""#).unwrap();
         Ok(())
     }
-
 }

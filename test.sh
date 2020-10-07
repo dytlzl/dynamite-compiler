@@ -43,6 +43,7 @@ assert 45 'a = 0; for(i = 0; i < 10; i = i+1) a = a+i;a;'
 assert 12 'a = 0; for (;; a = a+3) if (a >= 10) break; return a;'
 assert 50 'a = 0; for (i = 0; i < 10; i = i+1) { j = 0; while (j < 5) { a = a+1; j = j+1; } } return a;'
 assert 0 'for (i = 0; i < 1;) { break; } return i;'
+assert 10 '{a = 0; j = 0; while (1) { if (j>=5) break; a = a+j; j = j+1; } return a;}'
 assert 50 'a = 0; for (i = 0; i < 10; i = i+1) { j = 0; while (1) { if (j>=5) break; a = a+1; j = j+1; } } return a;'
 
 
