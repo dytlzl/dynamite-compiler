@@ -21,6 +21,7 @@ pub enum NodeType {
     Brk,
     Block,
     Cf,
+    Df,
 }
 impl Default for NodeType {
     fn default() -> Self {
@@ -41,6 +42,7 @@ pub struct Node {
     pub ini: Option<Box<Node>>,
     pub upd: Option<Box<Node>>,
     pub children: Vec<Node>,
+    pub body: Option<Box<Node>>,
     pub value: usize,
     pub func_name: String,
     pub args: Vec<Node>,

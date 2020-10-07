@@ -18,6 +18,8 @@ pub enum Os {
     MacOS,
 }
 
+const ARGS_REG: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
+
 impl<'a> AsmGenerator<'a> {
     pub fn new(code: &'a str, node_stream: &'a Vec<Node>, stack_size: usize, target_os: Os) -> Self {
         Self {
@@ -33,15 +35,32 @@ impl<'a> AsmGenerator<'a> {
 
     pub fn gen(&mut self) -> std::io::Result<()> {
         writeln!(self.buf, ".intel_syntax noprefix")?;
-        let entry_point = if let Os::MacOS = self.target_os { "_main" } else { "main" };
-        writeln!(self.buf, ".globl {}", entry_point)?;
-        writeln!(self.buf, "{}:", entry_point)?;
+        writeln!(self.buf)?;
+        for node in self.node_stream {
+            self.gen_func(node)?;
+        }
+        Ok(())
+    }
+
+    pub fn gen_func(&mut self, node: &Node) -> std::io::Result<()> {
+        let prefix = if let Os::MacOS = self.target_os { "_" } else { "" };
+        writeln!(self.buf, ".globl {}{}", prefix, node.func_name)?;
+        writeln!(self.buf, "{}{}:", prefix, node.func_name)?;
 
         // prologue
         writeln!(self.buf, "  push rbp")?;
         writeln!(self.buf, "  mov rbp, rsp")?;
-        writeln!(self.buf, "  sub rsp, {}", self.stack_size)?;
-        self.gen_with_vec(self.node_stream)?;
+        writeln!(self.buf, "  sub rsp, {}", node.offset)?;
+        for (i, arg) in node.args.iter().enumerate() {
+            if let NodeType::LVar = arg.nt {
+                writeln!(self.buf, "  mov rax, rbp")?;
+                writeln!(self.buf, "  sub rax, {}", arg.offset)?;
+                writeln!(self.buf, "  mov [rax], {}", ARGS_REG[i])?;
+            } else {
+                error_at(self.code, arg.token.as_ref().unwrap().pos, "ident expected");
+            }
+        }
+        self.gen_with_node(node.body.as_ref().unwrap())?;
         self.epilogue()?;
         Ok(())
     }
@@ -56,7 +75,6 @@ impl<'a> AsmGenerator<'a> {
     fn gen_with_node(&mut self, node: &Node) -> std::io::Result<()> {
         match node.nt {
             NodeType::Cf => {
-                const ARGS_REG: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
                 writeln!(self.buf, "  mov rax, rsp")?;
                 writeln!(self.buf, "  add rax, 8")?;
                 writeln!(self.buf, "  mov rdi, 16")?;
@@ -69,7 +87,8 @@ impl<'a> AsmGenerator<'a> {
                 for i in 0..node.args.len() {
                     self.pop(ARGS_REG[i])?;
                 }
-                writeln!(self.buf, "  call _{}", &node.func_name)?;
+                let prefix = if let Os::MacOS = self.target_os { "_" } else { "" };
+                writeln!(self.buf, "  call {}{}", prefix, &node.func_name)?;
                 writeln!(self.buf, "  pop rdi")?;
                 writeln!(self.buf, "  add rsp, rdi")?;
                 self.push("rax")?;

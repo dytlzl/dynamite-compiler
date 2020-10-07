@@ -51,6 +51,7 @@ impl<'a> AstBuilder<'a> {
         self.cur += 1;
         self.tokens[self.cur - 1].clone()
     }
+
     fn at_eof(&self) -> bool {
         if let TokenType::Eof = self.tokens[self.cur].tt {
             true
@@ -61,9 +62,42 @@ impl<'a> AstBuilder<'a> {
     pub fn stream(&mut self) -> Vec<Node> {
         let mut v = Vec::new();
         while !self.at_eof() {
-            v.push(self.stmt())
+            v.push(self.definition())
         }
         v
+    }
+    fn definition(&mut self) -> Node {
+        self.offset_size = 0;
+        self.offset_map = HashMap::new();
+        if let Some(t) = self.consume_ident() {
+            if let Some(_) = self.consume_reserved("(") {
+                let mut args: Vec<Node> = Vec::new();
+                if let None = self.consume_reserved(")") {
+                    args.push(self.expr());
+                    while let None = self.consume_reserved(")") {
+                        self.expect(",");
+                        args.push(self.expr());
+                    }
+                    if args.len() >= 7 {
+                        error_at(self.code, t.pos, "count of args must be less than 7")
+                    }
+                }
+                let s_value = t.s_value.clone();
+                if let Some(block) = self.consume_block() {
+                    return Node {
+                        token: Some(t),
+                        nt: NodeType::Df,
+                        func_name: String::from(s_value),
+                        body: Some(Box::new(block)),
+                        offset: self.offset_size,
+                        args,
+                        ..Node::default()
+                    }
+                }
+            }
+        }
+        error_at(self.code, self.tokens[self.cur].pos, "unexpected token");
+        unreachable!()
     }
     fn stmt(&mut self) -> Node {
         if let Some(t) = self.consume_reserved("if") {
@@ -102,17 +136,8 @@ impl<'a> AstBuilder<'a> {
             }
             return Node::new_for_node(Some(t), ini, cond, upd, self.stmt());
         }
-        if let Some(t) = self.consume_reserved("{") {
-            let mut children: Vec<Node> = Vec::new();
-            while let None = self.consume_reserved("}") {
-                children.push(self.stmt());
-            }
-            return Node {
-                token: Some(t),
-                nt: NodeType::Block,
-                children,
-                ..Node::default()
-            };
+        if let Some(node) = self.consume_block() {
+            return node
         }
         let node = if let Some(t) = self.consume_reserved("break") {
             Node {
@@ -127,6 +152,24 @@ impl<'a> AstBuilder<'a> {
         };
         self.expect(";");
         node
+    }
+    pub fn consume_block(&mut self) -> Option<Node> {
+        if let Some(t) = self.consume_reserved("{") {
+            let mut children: Vec<Node> = Vec::new();
+            while let None = self.consume_reserved("}") {
+                children.push(self.stmt());
+            }
+            Some(
+                Node {
+                    token: Some(t),
+                    nt: NodeType::Block,
+                    children,
+                    ..Node::default()
+                }
+            )
+        } else {
+            None
+        }
     }
     pub fn expr(&mut self) -> Node {
         self.assign()
@@ -248,7 +291,7 @@ impl<'a> AstBuilder<'a> {
                     Some(t),
                     NodeType::LVar,
                     offset)
-            }
+            };
         }
         let t = self.expect_number();
         let value = t.i_value;
