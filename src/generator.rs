@@ -7,6 +7,7 @@ pub struct AsmGenerator<'a> {
     code: &'a str,
     pub buf: Vec<u8>,
     node_stream: &'a Vec<Node>,
+    stack_size: usize,
     target_os: Os,
     branch_count: usize,
     loop_stack: VecDeque<usize>,
@@ -18,18 +19,19 @@ pub enum Os {
 }
 
 impl<'a> AsmGenerator<'a> {
-    pub fn new(code: &'a str, node_stream: &'a Vec<Node>, target_os: Os) -> Self {
+    pub fn new(code: &'a str, node_stream: &'a Vec<Node>, stack_size: usize, target_os: Os) -> Self {
         Self {
             code,
             buf: Vec::new(),
             node_stream,
+            stack_size: (stack_size+15)/16*16, // stack size should be a multiple of 16
             target_os,
             branch_count: 0,
             loop_stack: VecDeque::new(),
         }
     }
 
-    pub fn gen_asm(&mut self, stack_size: usize) -> std::io::Result<()> {
+    pub fn gen_asm(&mut self) -> std::io::Result<()> {
         writeln!(self.buf, ".intel_syntax noprefix")?;
         let entry_point = if let Os::MacOS = self.target_os { "_main" } else { "main" };
         writeln!(self.buf, ".globl {}", entry_point)?;
@@ -38,12 +40,12 @@ impl<'a> AsmGenerator<'a> {
         // prologue
         writeln!(self.buf, "  push rbp")?;
         writeln!(self.buf, "  mov rbp, rsp")?;
-        writeln!(self.buf, "  sub rsp, {}", stack_size)?;
-
+        writeln!(self.buf, "  sub rsp, {}", self.stack_size)?;
         for node in self.node_stream {
+            self.reset_stack()?;
             self.gen_asm_with_node(node)?;
+            self.pop_rax()?;
         }
-        self.pop_rax()?;
         self.epilogue()?;
         Ok(())
     }
@@ -52,32 +54,6 @@ impl<'a> AsmGenerator<'a> {
         writeln!(self.buf, "  mov rsp, rbp")?;
         writeln!(self.buf, "  pop rbp")?;
         writeln!(self.buf, "  ret")?;
-        Ok(())
-    }
-
-    fn gen_asm_with_local_variable(&mut self, n: &Node) -> std::io::Result<()> {
-        writeln!(self.buf, "  mov rax, rbp")?;
-        assert_ne!(n.offset, 0);
-        writeln!(self.buf, "  sub rax, {}", n.offset)?;
-        writeln!(self.buf, "  push rax")?;
-        Ok(())
-    }
-
-    fn new_branch_num(&mut self) -> usize {
-        self.branch_count += 1;
-        self.branch_count
-    }
-
-    fn pop_rax(&mut self) -> std::io::Result<()> {
-        writeln!(self.buf, "  pop rax")?;
-        Ok(())
-    }
-    fn pop_rdi(&mut self) -> std::io::Result<()> {
-        writeln!(self.buf, "  pop rdi")?;
-        Ok(())
-    }
-    fn push_value(&mut self, s: &str) -> std::io::Result<()> {
-        writeln!(self.buf, "  push {}", s)?;
         Ok(())
     }
 
@@ -102,6 +78,7 @@ impl<'a> AsmGenerator<'a> {
                 let branch_num = self.new_branch_num();
                 self.loop_stack.push_back(branch_num);
                 writeln!(self.buf, ".Lbegin{}:", branch_num)?;
+                self.reset_stack()?;
                 self.gen_asm_with_node(n.cond.as_ref().unwrap())?;
                 self.pop_rax()?;
                 writeln!(self.buf, "  cmp rax, 0")?;
@@ -120,6 +97,7 @@ impl<'a> AsmGenerator<'a> {
                     self.pop_rax()?;
                 }
                 writeln!(self.buf, ".Lbegin{}:", branch_num)?;
+                self.reset_stack()?;
                 if let Some(_) = n.cond {
                     self.gen_asm_with_node(n.cond.as_ref().unwrap())?;
                     self.pop_rax()?;
@@ -140,6 +118,7 @@ impl<'a> AsmGenerator<'a> {
             }
             NodeType::Block => {
                 for child in &n.children {
+                    self.reset_stack()?;
                     self.gen_asm_with_node(child)?;
                 }
                 return Ok(())
@@ -159,7 +138,7 @@ impl<'a> AsmGenerator<'a> {
                 return Ok(());
             }
             NodeType::Num => {
-                writeln!(self.buf, "  push {}", n.value)?;
+                self.push_value(n.value)?;
                 return Ok(());
             }
             NodeType::LVar => {
@@ -222,4 +201,55 @@ impl<'a> AsmGenerator<'a> {
         self.push_value("rax")?;
         Ok(())
     }
+
+    fn gen_asm_with_local_variable(&mut self, n: &Node) -> std::io::Result<()> {
+        writeln!(self.buf, "  mov rax, rbp")?;
+        assert_ne!(n.offset, 0);
+        writeln!(self.buf, "  sub rax, {}", n.offset)?;
+        writeln!(self.buf, "  push rax")?;
+        Ok(())
+    }
+
+    fn new_branch_num(&mut self) -> usize {
+        self.branch_count += 1;
+        self.branch_count
+    }
+
+    fn pop_rax(&mut self) -> std::io::Result<()> {
+        writeln!(self.buf, "  pop rax")?;
+        Ok(())
+    }
+
+    fn pop_rdi(&mut self) -> std::io::Result<()> {
+        writeln!(self.buf, "  pop rdi")?;
+        Ok(())
+    }
+
+    fn push_value<T: std::fmt::Display>(&mut self, v: T) -> std::io::Result<()> {
+        writeln!(self.buf, "  push {}", v)?;
+        Ok(())
+    }
+
+    fn reset_stack(&mut self) -> std::io::Result<()> {
+        writeln!(self.buf, "  mov rsp, rbp")?;
+        writeln!(self.buf, "  sub rsp, {}", self.stack_size)?;
+        Ok(())
+    }
+
+    fn _printf(&mut self, offset: usize) -> std::io::Result<()> {
+        self.reset_stack()?;
+        writeln!(self.buf, r#"  lea rdi, [rip + L_.str]
+  mov esi, dword ptr [rbp - {}]
+  mov al, 0
+  call _printf"#, offset)?;
+        Ok(())
+    }
+
+    fn _set_string(&mut self) -> std::io::Result<()> {
+        writeln!(self.buf, r#"  .section __TEXT,__cstring,cstring_literals
+L_.str:                                 ## @.str
+  .asciz "value = %d\n""#).unwrap();
+        Ok(())
+    }
+
 }
