@@ -1,5 +1,5 @@
 use std::io::Write;
-use crate::node::{Node, NodeType};
+use crate::node::{Node, NodeType, Type};
 use crate::error::{error, error_at};
 use std::collections::VecDeque;
 
@@ -50,11 +50,11 @@ impl<'a> AsmGenerator<'a> {
         // prologue
         writeln!(self.buf, "  push rbp")?;
         writeln!(self.buf, "  mov rbp, rsp")?;
-        writeln!(self.buf, "  sub rsp, {}", node.offset)?;
+        writeln!(self.buf, "  sub rsp, {}", node.offset.unwrap())?;
         for (i, arg) in node.args.iter().enumerate() {
             if let NodeType::LVar = arg.nt {
                 writeln!(self.buf, "  mov rax, rbp")?;
-                writeln!(self.buf, "  sub rax, {}", arg.offset)?;
+                writeln!(self.buf, "  sub rax, {}", arg.offset.unwrap())?;
                 writeln!(self.buf, "  mov [rax], {}", ARGS_REG[i])?;
             } else {
                 error_at(self.code, arg.token.as_ref().unwrap().pos, "ident expected");
@@ -62,6 +62,7 @@ impl<'a> AsmGenerator<'a> {
         }
         self.gen_with_node(node.body.as_ref().unwrap())?;
         self.epilogue()?;
+        writeln!(self.buf)?;
         Ok(())
     }
 
@@ -170,18 +171,29 @@ impl<'a> AsmGenerator<'a> {
                 return Ok(());
             }
             NodeType::Num => {
-                self.push(node.value)?;
+                self.push(node.value.unwrap())?;
                 return Ok(());
             }
             NodeType::LVar => {
-                self.gen_with_local_variable(node)?;
+                self.gen_addr(node)?;
+                self.pop_rax()?;
+                writeln!(self.buf, "  mov rax, [rax]")?;
+                self.push("rax")?;
+                return Ok(());
+            }
+            NodeType::Addr => {
+                self.gen_addr(node.lhs.as_ref().unwrap())?;
+                return Ok(());
+            }
+            NodeType::Deref => {
+                self.gen_with_node(node.lhs.as_ref().unwrap())?;
                 self.pop_rax()?;
                 writeln!(self.buf, "  mov rax, [rax]")?;
                 self.push("rax")?;
                 return Ok(());
             }
             NodeType::Asg => {
-                self.gen_with_local_variable(node.lhs.as_ref().unwrap())?;
+                self.gen_addr(node.lhs.as_ref().unwrap())?;
                 self.gen_with_node(node.rhs.as_ref().unwrap())?;
                 self.pop_rdi()?;
                 self.pop_rax()?;
@@ -197,9 +209,15 @@ impl<'a> AsmGenerator<'a> {
         self.pop_rax()?;
         match node.nt {
             NodeType::Add => {
+                if let Some(Type::Ptr(t)) = node.lhs.as_ref().unwrap().resolve_type() {
+                    writeln!(self.buf, "  imul rdi, {}", t.size_of())?;
+                }
                 writeln!(self.buf, "  add rax, rdi")?;
             }
             NodeType::Sub => {
+                if let Some(Type::Ptr(t)) = node.lhs.as_ref().unwrap().resolve_type() {
+                    writeln!(self.buf, "  imul rdi, {}", t.size_of())?;
+                }
                 writeln!(self.buf, "  sub rax, rdi")?;
             }
             NodeType::Mul => {
@@ -243,11 +261,20 @@ impl<'a> AsmGenerator<'a> {
         Ok(())
     }
 
-    fn gen_with_local_variable(&mut self, n: &Node) -> std::io::Result<()> {
-        writeln!(self.buf, "  mov rax, rbp")?;
-        assert_ne!(n.offset, 0);
-        writeln!(self.buf, "  sub rax, {}", n.offset)?;
-        writeln!(self.buf, "  push rax")?;
+    fn gen_addr(&mut self, node: &Node) -> std::io::Result<()> {
+        match node.nt {
+            NodeType::LVar => {
+                writeln!(self.buf, "  mov rax, rbp")?;
+                writeln!(self.buf, "  sub rax, {}", node.offset.unwrap())?;
+                writeln!(self.buf, "  push rax")?
+            }
+            NodeType::Deref => {
+                self.gen_with_node(node.lhs.as_ref().unwrap())?;
+            }
+            _ => {
+                unreachable!();
+            }
+        }
         Ok(())
     }
 

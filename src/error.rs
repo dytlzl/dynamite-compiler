@@ -10,7 +10,7 @@ pub fn error(err: &str) {
 
 pub fn error_at(code: &str, i: usize, err: &str) {
     eprintln!("{}{}{}", COLOR_CYAN, code, COLOR_RESET);
-    eprintln!("{}^ {}{}{}", " ".repeat(i),
+    eprintln!("{}{}^ {}{}", " ".repeat(i),
               COLOR_RED,
               if i >= code.len() { "unexpected eof while parsing" } else { err },
               COLOR_RESET);

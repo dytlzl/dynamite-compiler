@@ -22,7 +22,10 @@ pub enum NodeType {
     Block,
     Cf,
     Df,
+    Addr,
+    Deref,
 }
+
 impl Default for NodeType {
     fn default() -> Self {
         Self::Num
@@ -43,10 +46,11 @@ pub struct Node {
     pub upd: Option<Box<Node>>,
     pub children: Vec<Node>,
     pub body: Option<Box<Node>>,
-    pub value: usize,
+    pub value: Option<usize>,
     pub func_name: String,
     pub args: Vec<Node>,
-    pub offset: usize,
+    pub cty: Option<Type>,
+    pub offset: Option<usize>,
 }
 
 impl Node {
@@ -71,7 +75,7 @@ impl Node {
         Self {
             token,
             nt: NodeType::Num,
-            value,
+            value: Some(value),
             ..Self::default()
         }
     }
@@ -79,7 +83,7 @@ impl Node {
         Self {
             token,
             nt,
-            offset,
+            offset: Some(offset),
             ..Self::default()
         }
     }
@@ -113,18 +117,45 @@ impl Node {
             ..Self::default()
         }
     }
+    pub fn resolve_type(&self) -> Option<Type> {
+        match self.nt {
+            NodeType::LVar | NodeType::Num | NodeType::Cf => { self.cty.clone() }
+            NodeType::Addr => {
+                if let Some(ty) = self.lhs.as_ref().unwrap().resolve_type() {
+                    Some(Type::Ptr(Box::new(ty)))
+                } else {
+                    None
+                }
+            }
+            NodeType::Deref => {
+                if let Some(Type::Ptr(ty)) = self.cty.clone() { Some(*ty) } else { unreachable!(); }
+            }
+            _ => {
+                if let Some(n) = self.lhs.as_ref() {
+                    n.resolve_type()
+                } else {
+                    None
+                }
+            }
+        }
+    }
     pub fn format(&self) -> String {
         match self.nt {
             NodeType::Num => {
-                format!("{}", self.value)
+                format!("{}", self.value.unwrap())
             }
             NodeType::LVar => {
-                format!("{:?}({})", self.nt, self.offset)
+                format!("{:?}({})", self.nt, self.offset.unwrap())
             }
-            NodeType::Ret => {
+            NodeType::Ret | NodeType::Deref | NodeType::Addr => {
                 format!("{:?}({})",
                         self.nt,
                         self.lhs.as_ref().map(|n| n.format()).unwrap())
+            }
+            NodeType::Df => {
+                format!("{:?}({})",
+                        self.nt,
+                        self.body.as_ref().map(|n| n.format()).unwrap())
             }
             NodeType::Brk => {
                 format!("{:?}", self.nt)
@@ -155,15 +186,15 @@ impl Node {
                         Self::format_optional_node(self.then.as_ref()))
             }
             NodeType::Block => {
-                String::from("{")+
+                String::from("{") +
                     &self.children.iter().map(
-                        |n| {n.format()}).collect::<Vec<String>>().join(", ") +
+                        |n| { n.format() }).collect::<Vec<String>>().join(", ") +
                     "}"
             }
             NodeType::Cf => {
-                format!("{:?}(", self.nt)+
+                format!("{:?}(", self.nt) +
                     &self.args.iter().map(
-                        |n| {n.format()}).collect::<Vec<String>>().join(", ") +
+                        |n| { n.format() }).collect::<Vec<String>>().join(", ") +
                     ")"
             }
             NodeType::Add | NodeType::Sub | NodeType::Mul | NodeType::Div | NodeType::Mod |
@@ -184,5 +215,26 @@ impl Node {
         } else {
             String::from("None")
         }
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub enum Type {
+    Int,
+    Ptr(Box<Type>),
+}
+
+impl Type {
+    pub fn size_of(&self) -> usize {
+        match self {
+            Type::Int => { 4 }
+            Type::Ptr(_) => { 8 }
+        }
+    }
+}
+
+impl Default for Type {
+    fn default() -> Self {
+        Self::Int
     }
 }

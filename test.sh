@@ -44,7 +44,10 @@ assert 12 'int main() { int a = 0; for (;; a = a+3) if (a >= 10) break; return a
 assert 50 'int main() { int a = 0; int i; int j; for (i = 0; i < 10; i = i+1) { j = 0; while (j < 5) { a = a+1; j = j+1; } } return a; }'
 assert 0 'int main() { int i; for (i = 0; i < 1;) { break; } return i; }'
 assert 10 'int main() { int a = 0; int j = 0; while (1) { if (j>=5) break; a = a+j; j = j+1; } return a; }'
+
 assert 50 'int main() { int a = 0; int i; for (i = 0; i < 10; i = i+1) { int j = 0; while (1) { if (j>=5) break; a = a+1; j = j+1; } } return a; }'
-assert 104 'int main() { return add6(Add(3, 8), 2, 3, 4, 5, 6); } int Add(int a, int b) { return a*2+b; } int add6(int a, int b, int c, int d, int e, int f) { return a + b*2 + c*3 + d*4 + e*5 + f*6; }'
+assert 104 'int add6(int a, int b, int c, int d, int e, int f) { return a + b*2 + c*3 + d*4 + e*5 + f*6; } int Add(int a, int b) { return a*2+b; } int main() { return add6(Add(3, 8), 2, 3, 4, 5, 6); }'
+assert 233 'int fib(int i) { if (i == 0) return 0; if(i == 1) return 1; return fib(i-1) + fib(i-2); } int main() { return fib(13); } '
+# assert 3 'int main() { int x; int *y; y = &x; *y = 3; return x; }'
 
 echo OK

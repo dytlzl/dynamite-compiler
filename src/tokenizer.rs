@@ -51,7 +51,7 @@ impl Tokenizer {
                 ' ' | '\t' | '\n' => {
                     i += 1;
                 }
-                '+' | '-' | '*' | '/' | '%' | '(' | ')' | ';' | '{' | '}' | ',' => {
+                '+' | '-' | '*' | '/' | '%' | '(' | ')' | ';' | '{' | '}' | ',' | '&' => {
                     let pos = chars[i].0;
                     self.push_reserved_token(pos, String::from(chars[i].1));
                     i += 1;
