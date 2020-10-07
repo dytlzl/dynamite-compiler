@@ -56,12 +56,19 @@ impl<'a> AsmGenerator<'a> {
     fn gen_with_node(&mut self, node: &Node) -> std::io::Result<()> {
         match node.nt {
             NodeType::Cf => {
+                const ARGS_REG: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
                 writeln!(self.buf, "  mov rax, rsp")?;
                 writeln!(self.buf, "  add rax, 8")?;
                 writeln!(self.buf, "  mov rdi, 16")?;
                 writeln!(self.buf, "  cqo\n  idiv rdi")?;
                 writeln!(self.buf, "  sub rsp, rdx")?;
                 writeln!(self.buf, "  push rdx")?;
+                for node in &node.args {
+                    self.gen_with_node(node)?;
+                }
+                for i in 0..node.args.len() {
+                    self.pop(ARGS_REG[i])?;
+                }
                 writeln!(self.buf, "  call _{}", &node.func_name)?;
                 writeln!(self.buf, "  pop rdi")?;
                 writeln!(self.buf, "  add rsp, rdi")?;
@@ -237,6 +244,11 @@ impl<'a> AsmGenerator<'a> {
 
     fn pop_rdi(&mut self) -> std::io::Result<()> {
         writeln!(self.buf, "  pop rdi")?;
+        Ok(())
+    }
+
+    fn pop<T: std::fmt::Display>(&mut self, v: T) -> std::io::Result<()> {
+        writeln!(self.buf, "  pop {}", v)?;
         Ok(())
     }
 

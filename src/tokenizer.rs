@@ -50,7 +50,7 @@ impl Tokenizer {
                 ' ' | '\t' | '\n' => {
                     i += 1;
                 }
-                '+' | '-' | '*' | '/' | '%' | '(' | ')' | ';' | '{' | '}' => {
+                '+' | '-' | '*' | '/' | '%' | '(' | ')' | ';' | '{' | '}' | ',' => {
                     let pos = chars[i].0;
                     self.push_reserved_token(pos, String::from(chars[i].1));
                     i += 1;
@@ -115,13 +115,13 @@ impl Tokenizer {
                     }
                     self.push_num_token(pos, temp);
                 }
-                'a'..='z' => {
+                'a'..='z' | 'A'..='Z' => {
                     let pos = chars[i].0;
                     let mut temp = String::from(chars[i].1);
                     i += 1;
                     while i < chars.len() {
                         match chars[i].1 {
-                            'a'..='z' => {
+                            'a'..='z' | 'A'..='Z' | '0'..='9' => {
                                 temp.push(chars[i].1);
                                 i += 1;
                             }

@@ -43,6 +43,7 @@ pub struct Node {
     pub children: Vec<Node>,
     pub value: usize,
     pub func_name: String,
+    pub args: Vec<Node>,
     pub offset: usize,
 }
 
@@ -156,6 +157,12 @@ impl Node {
                     &self.children.iter().map(
                         |n| {n.format()}).collect::<Vec<String>>().join(", ") +
                     "}"
+            }
+            NodeType::Cf => {
+                format!("{:?}(", self.nt)+
+                    &self.args.iter().map(
+                        |n| {n.format()}).collect::<Vec<String>>().join(", ") +
+                    ")"
             }
             NodeType::Add | NodeType::Sub | NodeType::Mul | NodeType::Div | NodeType::Mod |
             NodeType::Asg | NodeType::Lt | NodeType::Le => {
