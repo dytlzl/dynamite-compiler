@@ -2,6 +2,7 @@ use crate::token::{Token, TokenType};
 use crate::error::error_at;
 
 const RESERVED_WORDS: [&str; 6] = ["return", "if", "else", "while", "for", "break"];
+pub const TYPES: [&str; 1] = ["int"];
 
 pub struct Tokenizer {
     pub tokens: Vec<Token>,
@@ -130,7 +131,7 @@ impl Tokenizer {
                             }
                         }
                     }
-                    if RESERVED_WORDS.contains(&&temp[..]) {
+                    if RESERVED_WORDS.contains(&&temp[..]) || TYPES.contains(&&temp[..]) {
                         self.push_reserved_token(pos, temp);
                     } else {
                         self.push_ident_token(pos, temp);
