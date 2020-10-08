@@ -58,5 +58,7 @@ assert 8 'int main() {int a[3]; a[0] = 8; a[3] = 9; return a[0];} '
 assert 9 'int main() {int a[3]; a[0] = 8; a[3] = 9; return 3[a];} '
 assert 4 'int b; int main() { b = 4; return b;} '
 assert 9 'int arr[100];  int c; int main() { c = 4; arr[10] = 5; arr[7] = 7; return c+arr[10];}'
+assert 3 'int main() { char x[3]; x[0] = -1; x[1] = 2; int y; y = 4; return x[0] + y; }'
+assert 3 'char x[3]; int main() {  x[0] = -1; x[1] = 2; int y; y = 4; return x[0] + y; }'
 
 echo OK

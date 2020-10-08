@@ -77,8 +77,7 @@ impl<'a> AstBuilder<'a> {
         v
     }
     fn new_local_variable(&mut self) -> Node {
-        self.expect("int");
-        let mut ty = Type::Int;
+        let mut ty = self.expect_type();
         while let Some(_) = self.consume_reserved("*") {
             ty = Type::Ptr(Box::new(ty));
         }
@@ -97,30 +96,46 @@ impl<'a> AstBuilder<'a> {
             unreachable!();
         }
     }
+    fn consume_type(&mut self) -> Option<Type> {
+        if let Some(_) = self.consume_reserved("int") {
+            Some(Type::Int)
+        } else if let Some(_) = self.consume_reserved("char") {
+            Some(Type::Char)
+        } else {
+            None
+        }
+    }
+    fn expect_type(&mut self) -> Type {
+        if let Some(ty) = self.consume_type() {
+            ty
+        } else {
+            error_at(self.code, self.tokens[self.cur].pos, "type expected");
+            unreachable!()
+        }
+    }
     fn definition(&mut self) -> Node {
         self.offset_size = 0;
         self.offset_map = HashMap::new();
-        self.expect("int");
-        let mut ty = Type::Int;
+        let mut ty = self.expect_type();
         while let Some(_) = self.consume_reserved("*") {
             ty = Type::Ptr(Box::new(ty));
         }
         if let Some(t) = self.consume_ident() {
             if let Some(_) = self.consume_reserved("(") {
                 let mut args: Vec<Node> = Vec::new();
-                let mut arg_types: Vec<Type> = Vec::new();
                 if let None = self.consume_reserved(")") {
                     args.push(self.new_local_variable());
-                    arg_types.push(Type::Int);
                     while let None = self.consume_reserved(")") {
                         self.expect(",");
                         args.push(self.new_local_variable());
-                        arg_types.push(Type::Int);
                     }
                     if args.len() >= 7 {
                         error_at(self.code, t.pos, "count of args must be less than 7")
                     }
                 }
+                let arg_types: Vec<Type> = args.iter().map(
+                    |arg| { arg.cty.clone().unwrap() }
+                ).collect();
                 self.function_types.insert(t.s_value.clone(), (arg_types, ty));
                 let s_value = t.s_value.clone();
                 if let Some(block) = self.consume_block() {
@@ -194,8 +209,7 @@ impl<'a> AstBuilder<'a> {
         if let Some(node) = self.consume_block() {
             return node;
         }
-        let node = if let Some(_) = self.consume_reserved("int") {
-            let mut ty = Type::Int;
+        let node = if let Some(mut ty) = self.consume_type() {
             while let Some(_) = self.consume_reserved("*") {
                 ty = Type::Ptr(Box::new(ty));
             }
