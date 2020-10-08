@@ -4,6 +4,7 @@ use crate::token::Token;
 pub enum NodeType {
     Asg,
     LVar,
+    GVar,
     Add,
     Sub,
     Mul,
@@ -47,7 +48,7 @@ pub struct Node {
     pub children: Vec<Node>,
     pub body: Option<Box<Node>>,
     pub value: Option<usize>,
-    pub func_name: String,
+    pub global_name: String,
     pub args: Vec<Node>,
     pub cty: Option<Type>,
     pub offset: Option<usize>,
@@ -119,7 +120,7 @@ impl Node {
     }
     pub fn resolve_type(&self) -> Option<Type> {
         match self.nt {
-            NodeType::LVar | NodeType::Num | NodeType::Cf => { self.cty.clone() }
+            NodeType::LVar | NodeType::Num | NodeType::Cf | NodeType::GVar => { self.cty.clone() }
             NodeType::Addr => {
                 if let Some(ty) = self.lhs.as_ref().unwrap().resolve_type() {
                     Some(Type::Ptr(Box::new(ty)))

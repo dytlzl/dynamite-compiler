@@ -10,6 +10,7 @@ pub struct AstBuilder<'a> {
     pub offset_size: usize,
     offset_map: HashMap<String, (Type, usize)>,
     function_types: HashMap<String, (Vec<Type>, Type)>,
+    global_variables: HashMap<String, Type>,
 }
 
 impl<'a> AstBuilder<'a> {
@@ -21,6 +22,7 @@ impl<'a> AstBuilder<'a> {
             offset_size: 0,
             offset_map: HashMap::new(),
             function_types: HashMap::new(),
+            global_variables: HashMap::new(),
         }
     }
     fn consume_reserved(&mut self, s_value: &str) -> Option<Token> {
@@ -99,6 +101,10 @@ impl<'a> AstBuilder<'a> {
         self.offset_size = 0;
         self.offset_map = HashMap::new();
         self.expect("int");
+        let mut ty = Type::Int;
+        while let Some(_) = self.consume_reserved("*") {
+            ty = Type::Ptr(Box::new(ty));
+        }
         if let Some(t) = self.consume_ident() {
             if let Some(_) = self.consume_reserved("(") {
                 let mut args: Vec<Node> = Vec::new();
@@ -115,18 +121,33 @@ impl<'a> AstBuilder<'a> {
                         error_at(self.code, t.pos, "count of args must be less than 7")
                     }
                 }
-                self.function_types.insert(t.s_value.clone(), (arg_types, Type::Int));
+                self.function_types.insert(t.s_value.clone(), (arg_types, ty));
                 let s_value = t.s_value.clone();
                 if let Some(block) = self.consume_block() {
                     return Node {
                         token: Some(t),
                         nt: NodeType::Df,
-                        func_name: String::from(s_value),
+                        global_name: String::from(s_value),
                         body: Some(Box::new(block)),
                         offset: Some(self.offset_size),
                         args,
                         ..Node::default()
                     };
+                }
+            } else {
+                if let Some(_) = self.consume_reserved("[") {
+                    let n = self.expect_number();
+                    ty = Type::Arr(Box::new(ty), n.i_value);
+                    self.expect("]");
+                }
+                self.expect(";");
+                self.global_variables.insert(t.s_value.clone(), ty.clone());
+                return Node {
+                    token: Some(t.clone()),
+                    nt: NodeType::GVar,
+                    cty: Some(ty),
+                    global_name: t.s_value,
+                    ..Node::default()
                 }
             }
         }
@@ -381,22 +402,33 @@ impl<'a> AstBuilder<'a> {
                 Node {
                     token: Some(t),
                     nt: NodeType::Cf,
-                    func_name: String::from(s_value),
+                    global_name: String::from(s_value),
                     cty: Some(ret_ty.clone()),
                     args,
                     ..Node::default()
                 }
             } else {
-                let (ty, offset) = self.offset_map.entry(t.s_value.clone()).or_default();
-                if offset == &0 {
+                if self.offset_map.contains_key(&t.s_value) {
+                    let (ty, offset) = self.offset_map.get(&t.s_value).unwrap();
+                    Node {
+                        token: Some(t.clone()),
+                        nt: NodeType::LVar,
+                        cty: Some(ty.clone()),
+                        offset: Some(offset.clone()),
+                        ..Node::default()
+                    }
+                } else if self.global_variables.contains_key(&t.s_value) {
+                    let ty = self.global_variables.get(&t.s_value).unwrap();
+                    Node {
+                        token: Some(t.clone()),
+                        nt: NodeType::GVar,
+                        cty: Some(ty.clone()),
+                        global_name: t.s_value.clone(),
+                        ..Node::default()
+                    }
+                } else {
                     error_at(self.code, t.pos, "undefined variable");
-                }
-                Node {
-                    token: Some(t),
-                    nt: NodeType::LVar,
-                    cty: Some(ty.clone()),
-                    offset: Some(offset.clone()),
-                    ..Node::default()
+                    unreachable!();
                 }
             }
         } else {

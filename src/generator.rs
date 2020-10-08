@@ -37,15 +37,36 @@ impl<'a> AsmGenerator<'a> {
         writeln!(self.buf, ".intel_syntax noprefix")?;
         writeln!(self.buf)?;
         for node in self.node_stream {
-            self.gen_func(node)?;
+            match node.nt {
+                NodeType::Df => { self.gen_func(node)?; }
+                NodeType::GVar => { self.gen_global_variable(node)?; }
+                _ => { unreachable!(); }
+            }
         }
         Ok(())
     }
 
-    pub fn gen_func(&mut self, node: &Node) -> std::io::Result<()> {
+    pub fn gen_global_variable(&mut self, node: &Node) -> std::io::Result<()> {
+        writeln!(self.buf, ".section __DATA,__data",)?;
         let prefix = if let Os::MacOS = self.target_os { "_" } else { "" };
-        writeln!(self.buf, ".globl {}{}", prefix, node.func_name)?;
-        writeln!(self.buf, "{}{}:", prefix, node.func_name)?;
+        writeln!(self.buf, "{}{}:", prefix, node.global_name)?;
+        match node.cty.as_ref().unwrap() {
+            Type::Arr(_, _) => {
+                writeln!(self.buf, "  .zero {}", node.cty.as_ref().unwrap().size_of())?;
+            },
+            _ => {
+                writeln!(self.buf, "  .long 0")?;
+            },
+        }
+        writeln!(self.buf)?;
+        Ok(())
+    }
+
+    pub fn gen_func(&mut self, node: &Node) -> std::io::Result<()> {
+        writeln!(self.buf, ".section __TEXT,__text,regular,pure_instructions",)?;
+        let prefix = if let Os::MacOS = self.target_os { "_" } else { "" };
+        writeln!(self.buf, ".globl {}{}", prefix, node.global_name)?;
+        writeln!(self.buf, "{}{}:", prefix, node.global_name)?;
 
         // prologue
         writeln!(self.buf, "  push rbp")?;
@@ -89,7 +110,7 @@ impl<'a> AsmGenerator<'a> {
                     self.pop(ARGS_REG[i])?;
                 }
                 let prefix = if let Os::MacOS = self.target_os { "_" } else { "" };
-                writeln!(self.buf, "  call {}{}", prefix, &node.func_name)?;
+                writeln!(self.buf, "  call {}{}", prefix, &node.global_name)?;
                 writeln!(self.buf, "  pop rdi")?;
                 writeln!(self.buf, "  add rsp, rdi")?;
                 self.push("rax")?;
@@ -174,7 +195,7 @@ impl<'a> AsmGenerator<'a> {
                 self.push(node.value.unwrap())?;
                 return Ok(());
             }
-            NodeType::LVar => {
+            NodeType::LVar | NodeType::GVar => {
                 self.gen_addr(node)?;
                 if let Some(Type::Arr(_, _)) = node.cty {
                     return Ok(());
@@ -268,10 +289,15 @@ impl<'a> AsmGenerator<'a> {
 
     fn gen_addr(&mut self, node: &Node) -> std::io::Result<()> {
         match node.nt {
+            NodeType::GVar => {
+                let prefix = if let Os::MacOS = self.target_os { "_" } else { "" };
+                writeln!(self.buf, "  lea rax, [rip + {}{}]", prefix, node.global_name)?;
+                self.push("rax")?;
+            }
             NodeType::LVar => {
                 writeln!(self.buf, "  mov rax, rbp")?;
                 writeln!(self.buf, "  sub rax, {}", node.offset.unwrap())?;
-                writeln!(self.buf, "  push rax")?
+                self.push("rax")?;
             }
             NodeType::Deref => {
                 self.gen_with_node(node.lhs.as_ref().unwrap())?;
