@@ -176,6 +176,9 @@ impl<'a> AsmGenerator<'a> {
             }
             NodeType::LVar => {
                 self.gen_addr(node)?;
+                if let Some(Type::Arr(_, _)) = node.cty {
+                    return Ok(());
+                }
                 self.pop_rax()?;
                 writeln!(self.buf, "  mov rax, [rax]")?;
                 self.push("rax")?;
@@ -209,13 +212,15 @@ impl<'a> AsmGenerator<'a> {
         self.pop_rax()?;
         match node.nt {
             NodeType::Add => {
-                if let Some(Type::Ptr(t)) = node.lhs.as_ref().unwrap().resolve_type() {
+                if let Some(t) = node.lhs.as_ref().unwrap().dest_type() {
                     writeln!(self.buf, "  imul rdi, {}", t.size_of())?;
+                } else if let Some(t) = node.rhs.as_ref().unwrap().dest_type() {
+                    writeln!(self.buf, "  imul rax, {}", t.size_of())?;
                 }
                 writeln!(self.buf, "  add rax, rdi")?;
             }
             NodeType::Sub => {
-                if let Some(Type::Ptr(t)) = node.lhs.as_ref().unwrap().resolve_type() {
+                if let Some(t) = node.lhs.as_ref().unwrap().dest_type() {
                     writeln!(self.buf, "  imul rdi, {}", t.size_of())?;
                 }
                 writeln!(self.buf, "  sub rax, rdi")?;

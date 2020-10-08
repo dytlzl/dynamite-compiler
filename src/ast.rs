@@ -9,13 +9,19 @@ pub struct AstBuilder<'a> {
     cur: usize,
     pub offset_size: usize,
     offset_map: HashMap<String, (Type, usize)>,
-    function_types: HashMap<String, (Vec<Type>, Type)>
+    function_types: HashMap<String, (Vec<Type>, Type)>,
 }
 
 impl<'a> AstBuilder<'a> {
     pub fn new(code: &'a str, tokens: &'a Vec<Token>) -> Self {
-        Self { code, tokens, cur: 0, offset_size: 0, offset_map: HashMap::new(),
-            function_types: HashMap::new() }
+        Self {
+            code,
+            tokens,
+            cur: 0,
+            offset_size: 0,
+            offset_map: HashMap::new(),
+            function_types: HashMap::new(),
+        }
     }
     fn consume_reserved(&mut self, s_value: &str) -> Option<Token> {
         if let TokenType::Reserved = self.tokens[self.cur].tt {
@@ -173,23 +179,39 @@ impl<'a> AstBuilder<'a> {
                 ty = Type::Ptr(Box::new(ty));
             }
             if let Some(t) = self.consume_ident() {
-                self.offset_size += 8;
-                self.offset_map.insert(t.s_value.clone(), (ty.clone(), self.offset_size));
-                let mut node = Node {
-                    token: Some(t),
-                    nt: NodeType::LVar,
-                    cty: Some(ty),
-                    offset: Some(self.offset_size),
-                    ..Node::default()
-                };
-                if let Some(t) = self.consume_reserved("=") {
-                    node = Node::new_with_op(
-                        Some(t),
-                        NodeType::Asg,
-                        node,
-                        self.assign());
+                if let Some(_) = self.consume_reserved("[") {
+                    let n = self.expect_number();
+                    let size = n.i_value * ty.size_of();
+                    ty = Type::Arr(Box::new(ty), n.i_value);
+                    self.offset_size += size;
+                    self.offset_map.insert(t.s_value.clone(), (ty.clone(), self.offset_size));
+                    self.expect("]");
+                    Node {
+                        token: Some(t),
+                        nt: NodeType::LVar,
+                        cty: Some(ty),
+                        offset: Some(self.offset_size),
+                        ..Node::default()
+                    }
+                } else {
+                    self.offset_size += 8;
+                    self.offset_map.insert(t.s_value.clone(), (ty.clone(), self.offset_size));
+                    let mut node = Node {
+                        token: Some(t),
+                        nt: NodeType::LVar,
+                        cty: Some(ty),
+                        offset: Some(self.offset_size),
+                        ..Node::default()
+                    };
+                    if let Some(t) = self.consume_reserved("=") {
+                        node = Node::new_with_op(
+                            Some(t),
+                            NodeType::Asg,
+                            node,
+                            self.assign());
+                    }
+                    node
                 }
-                node
             } else {
                 error_at(self.code, self.tokens[self.cur].pos, "expected ident");
                 unreachable!();
@@ -298,7 +320,7 @@ impl<'a> AstBuilder<'a> {
                 value: Some(self.unary().resolve_type().unwrap().size_of()),
                 cty: Some(Type::Int),
                 ..Node::default()
-            }
+            };
         }
         if let Some(_) = self.consume_reserved("+") {} else if let Some(t) = self.consume_reserved("-") {
             return Node::new_with_op(Some(t), NodeType::Sub, Node::new_with_num(None, 0), self.prim());
@@ -322,12 +344,12 @@ impl<'a> AstBuilder<'a> {
         self.prim()
     }
     fn prim(&mut self) -> Node {
-        if let Some(_) = self.consume_reserved("(") {
+        let mut node =  if let Some(_) = self.consume_reserved("(") {
             let node = self.expr();
             self.expect(")");
-            return node;
+            node
         } else if let Some(t) = self.consume_ident() {
-            return if let Some(_) = self.consume_reserved("(") {
+            if let Some(_) = self.consume_reserved("(") {
                 if !self.function_types.contains_key(&t.s_value) {
                     error_at(self.code, t.pos, "undefined function");
                 }
@@ -376,15 +398,34 @@ impl<'a> AstBuilder<'a> {
                     offset: Some(offset.clone()),
                     ..Node::default()
                 }
+            }
+        } else {
+            let t = self.expect_number();
+            Node {
+                token: Some(t.clone()),
+                nt: NodeType::Num,
+                value: Some(t.i_value),
+                cty: Some(Type::Int),
+                ..Node::default()
+            }
+        };
+        if let Some(b_token) = self.consume_reserved("[") {
+            let rhs = self.expr();
+            self.expect("]");
+            let addition = Node {
+                token: Some(b_token.clone()),
+                nt: NodeType::Add,
+                lhs: Some(Box::new(node)),
+                rhs: Some(Box::new(rhs)),
+                ..Node::default()
             };
+            node = Node {
+                token: Some(b_token.clone()),
+                nt: NodeType::Deref,
+                lhs: Some(Box::new(addition)),
+                ..Node::default()
+            }
         }
-        let t = self.expect_number();
-        let value = t.i_value;
-        Node {
-            token: Some(t),
-            value: Some(value),
-            cty: Some(Type::Int),
-            ..Node::default()
-        }
+        node
     }
 }

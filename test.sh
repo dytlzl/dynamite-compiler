@@ -21,7 +21,7 @@ if [ ! -d ./bin ]; then
   mkdir ./bin
 fi
 << CMT
-CMT
+
 
 assert 42 'int main() { return 42; }'
 assert 28 'int main() { return 3 * (29 % (13-2) + 3) - 2; }'
@@ -47,10 +47,15 @@ assert 10 'int main() { int a = 0; int j = 0; while (1) { if (j>=5) break; a = a
 assert 50 'int main() { int a = 0; int i; for (i = 0; i < 10; i = i+1) { int j = 0; while (1) { if (j>=5) break; a = a+1; j = j+1; } } return a; }'
 assert 104 'int add6(int a, int b, int c, int d, int e, int f) { return a + b*2 + c*3 + d*4 + e*5 + f*6; } int Add(int a, int b) { return a*2+b; } int main() { return add6(Add(3, 8), 2, 3, 4, 5, 6); }'
 assert 233 'int fib(int i) { if (i == 0) return 0; if(i == 1) return 1; return fib(i-1) + fib(i-2); } int main() { return fib(13); } '
+CMT
 assert 3 'int main() { int x; int *y; y = &x; *y = 3; return x; }'
 assert 4 'int main() { return sizeof(sizeof(1));}'
 assert 4 'int main() { return sizeof(8);}'
 assert 8 'int main() { int *y; return sizeof(y);}'
 assert 4 'int main() { int *y; return sizeof *y;}'
+assert 12 'int main() {int a[3]; return sizeof a;}'
+assert 3 'int main() {int a[2];*a = 1;*(a + 1) = 2;int *p;p = a;return *p + *(p + 1);}'
+assert 8 'int main() {int a[3]; a[0] = 8; a[3] = 9; return a[0];} '
+assert 9 'int main() {int a[3]; a[0] = 8; a[3] = 9; return 3[a];} '
 
 echo OK

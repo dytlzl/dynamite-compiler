@@ -124,19 +124,31 @@ impl Node {
                 if let Some(ty) = self.lhs.as_ref().unwrap().resolve_type() {
                     Some(Type::Ptr(Box::new(ty)))
                 } else {
-                    None
+                    unreachable!();
                 }
             }
             NodeType::Deref => {
-                if let Some(Type::Ptr(ty)) = self.lhs.as_ref().unwrap().cty.clone() { Some(*ty) } else { unreachable!(); }
+                self.lhs.as_ref().unwrap().dest_type()
             }
             _ => {
-                if let Some(n) = self.lhs.as_ref() {
-                    n.resolve_type()
+                if let Some(lhs) = self.lhs.as_ref() {
+                    if let (None, Some(rhs)) = (lhs.dest_type(), self.rhs.as_ref()) {
+                        if let Some(_) = rhs.dest_type() {
+                            return rhs.resolve_type()
+                        }
+                    }
+                    lhs.resolve_type()
                 } else {
-                    None
+                    unreachable!();
                 }
             }
+        }
+    }
+    pub fn dest_type(&self) -> Option<Type> {
+        if let Some(t) = self.resolve_type() {
+            t.dest_type()
+        } else {
+            None
         }
     }
     pub fn format(&self) -> String {
@@ -222,6 +234,7 @@ impl Node {
 pub enum Type {
     Int,
     Ptr(Box<Type>),
+    Arr(Box<Type>, usize)
 }
 
 impl Type {
@@ -229,6 +242,14 @@ impl Type {
         match self {
             Type::Int => { 4 }
             Type::Ptr(_) => { 8 }
+            Type::Arr(t, s) => { t.size_of()*s }
+        }
+    }
+    pub fn dest_type(&self) -> Option<Type> {
+        match self {
+            Type::Int => { None}
+            Type::Ptr(c) => { Some(*c.clone()) }
+            Type::Arr(c, _) => { Some(*c.clone()) }
         }
     }
 }
