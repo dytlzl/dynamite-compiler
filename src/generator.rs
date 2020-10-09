@@ -2,12 +2,11 @@ use std::io::Write;
 use crate::node::{Node, NodeType, Type};
 use crate::error::{error, error_at};
 use std::collections::VecDeque;
-use crate::ast::AstBuilder;
+use crate::ast::{AstBuilder, Func};
 
 pub struct AsmGenerator<'a> {
     code: &'a str,
     pub buf: Vec<u8>,
-    node_stream: &'a Vec<Node>,
     target_os: Os,
     branch_count: usize,
     loop_stack: VecDeque<usize>,
@@ -23,11 +22,10 @@ pub enum Os {
 const ARGS_REG: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
 
 impl<'a> AsmGenerator<'a> {
-    pub fn new(builder: &'a AstBuilder<'a>, code: &'a str, node_stream: &'a Vec<Node>, target_os: Os) -> Self {
+    pub fn new(builder: &'a AstBuilder<'a>, code: &'a str, target_os: Os) -> Self {
         Self {
             code,
             buf: Vec::new(),
-            node_stream,
             target_os,
             builder,
             branch_count: 0,
@@ -39,12 +37,14 @@ impl<'a> AsmGenerator<'a> {
     pub fn gen(&mut self) -> std::io::Result<()> {
         writeln!(self.buf, ".intel_syntax noprefix")?;
         writeln!(self.buf)?;
-        for node in self.node_stream {
-            match node.nt {
-                NodeType::Df => { self.gen_func(node)?; }
-                NodeType::GVar => { self.gen_global_variable(node)?; }
-                _ => { unreachable!(); }
-            }
+        if let Os::MacOS = self.target_os {
+            writeln!(self.buf, ".section __TEXT,__text,regular,pure_instructions")?;
+        }
+        for (s, f) in &self.builder.global_functions {
+            self.gen_func(s, f)?;
+        }
+        for (s, t) in &self.builder.global_variables {
+            self.gen_global_variable(s, t.clone())?;
         }
         self.gen_string_literals()?;
         Ok(())
@@ -65,17 +65,17 @@ impl<'a> AsmGenerator<'a> {
         Ok(())
     }
 
-    pub fn gen_global_variable(&mut self, node: &Node) -> std::io::Result<()> {
+    pub fn gen_global_variable(&mut self, name: &str, ty: Type) -> std::io::Result<()> {
         if let Os::MacOS = self.target_os {
             writeln!(self.buf, ".section __DATA,__data",)?;
         } else {
             writeln!(self.buf, ".section .data",)?;
         }
         let prefix = if let Os::MacOS = self.target_os { "_" } else { "" };
-        writeln!(self.buf, "{}{}:", prefix, node.global_name)?;
-        match node.resolve_type().as_ref().unwrap() {
+        writeln!(self.buf, "{}{}:", prefix, name)?;
+        match ty {
             Type::Arr(_, _) => {
-                writeln!(self.buf, "  .zero {}", node.resolve_type().as_ref().unwrap().size_of())?;
+                writeln!(self.buf, "  .zero {}", ty.size_of())?;
             },
             Type::Int => {
                 writeln!(self.buf, "  .int 0")?;
@@ -91,19 +91,19 @@ impl<'a> AsmGenerator<'a> {
         Ok(())
     }
 
-    pub fn gen_func(&mut self, node: &Node) -> std::io::Result<()> {
-        if let Os::MacOS = self.target_os {
-            writeln!(self.buf, ".section __TEXT,__text,regular,pure_instructions",)?;
+    pub fn gen_func(&mut self, name: &str, func: &Func) -> std::io::Result<()> {
+        if let None = func.body {
+            return Ok(())
         }
         let prefix = if let Os::MacOS = self.target_os { "_" } else { "" };
-        writeln!(self.buf, ".globl {}{}", prefix, node.global_name)?;
-        writeln!(self.buf, "{}{}:", prefix, node.global_name)?;
+        writeln!(self.buf, ".globl {}{}", prefix, name)?;
+        writeln!(self.buf, "{}{}:", prefix, name)?;
 
         // prologue
         writeln!(self.buf, "  push rbp")?;
         writeln!(self.buf, "  mov rbp, rsp")?;
-        writeln!(self.buf, "  sub rsp, {}", node.offset.unwrap())?;
-        for (i, arg) in node.args.iter().enumerate() {
+        writeln!(self.buf, "  sub rsp, {}", func.offset_size)?;
+        for (i, arg) in func.args.iter().enumerate() {
             if let NodeType::LVar = arg.nt {
                 writeln!(self.buf, "  mov rax, rbp")?;
                 writeln!(self.buf, "  sub rax, {}", arg.offset.unwrap())?;
@@ -112,8 +112,8 @@ impl<'a> AsmGenerator<'a> {
                 error_at(self.code, arg.token.as_ref().unwrap().pos, "ident expected");
             }
         }
-        self.current_stack_size = node.offset.unwrap();
-        self.gen_with_node(node.body.as_ref().unwrap())?;
+        self.current_stack_size = func.offset_size;
+        self.gen_with_node(func.body.as_ref().unwrap())?;
         self.epilogue()?;
         writeln!(self.buf)?;
         Ok(())

@@ -23,25 +23,14 @@ fn main() {
     }
     let mut tokenizer = Tokenizer::new();
     tokenizer.tokenize(&code);
-    if is_debug {
-        eprintln!("[tokens]");
-        tokenizer.print_tokens();
-    }
     let mut builder = AstBuilder::new(&code, &tokenizer.tokens);
-    let node_stream = builder.stream();
-    if is_debug {
-        eprintln!("[ast]");
-        for node in &node_stream {
-            eprintln!("{}", node.format());
-        }
-        eprintln!("[asm]");
-    }
+    builder.build();
     #[cfg(target_os = "linux")]
         let target_os = Os::Linux;
     #[cfg(target_os = "macos")]
         let target_os = Os::MacOS;
     let mut generator = AsmGenerator::new(
-        &builder, &code, &node_stream, target_os);
+        &builder, &code, target_os);
     generator.gen().unwrap();
     let asm = String::from_utf8(generator.buf).unwrap();
     print!("{}", &asm);

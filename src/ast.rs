@@ -9,9 +9,19 @@ pub struct AstBuilder<'a> {
     cur: usize,
     pub offset_size: usize,
     offset_map: HashMap<String, (Type, usize)>,
-    function_types: HashMap<String, (Vec<Type>, Type, bool)>,
-    global_variables: HashMap<String, Type>,
+    pub global_functions: HashMap<String, Func>,
+    pub global_variables: HashMap<String, Type>,
     pub string_literals: Vec<String>,
+}
+
+#[derive(Default)]
+pub struct Func {
+    pub body: Option<Node>,
+    pub arg_types: Vec<Type>,
+    pub return_type: Type,
+    pub offset_size: usize,
+    pub token: Option<Token>,
+    pub args: Vec<Node>,
 }
 
 impl<'a> AstBuilder<'a> {
@@ -22,17 +32,26 @@ impl<'a> AstBuilder<'a> {
             cur: 0,
             offset_size: 0,
             offset_map: HashMap::new(),
-            function_types: HashMap::new(),
+            global_functions: HashMap::new(),
             global_variables: HashMap::new(),
             string_literals: Vec::new(),
         };
-        builder.function_types.insert(
+        builder.global_functions.insert(
             String::from("printf"),
-            (vec![Type::Ptr(Box::new(Type::Char))], Type::Int, false),
+            Func {
+                arg_types: vec![Type::Ptr(Box::new(Type::Char))],
+                return_type: Type::Int,
+                ..Func::default()
+            },
         );
-        builder.function_types.insert(
+        builder.global_functions.insert(
             String::from("exit"),
-            (vec![Type::Int], Type::Int, true),
+            Func {
+                body: None,
+                arg_types: vec![Type::Int],
+                return_type: Type::Int,
+                ..Func::default()
+            },
         );
         builder
     }
@@ -87,14 +106,12 @@ impl<'a> AstBuilder<'a> {
             false
         }
     }
-    pub fn stream(&mut self) -> Vec<Node> {
-        let mut v = Vec::new();
+    pub fn build(&mut self) {
         while !self.at_eof() {
-            v.push(self.definition())
+            self.global_definition()
         }
-        v
     }
-    fn new_local_variable(&mut self, ty: Type) -> Node {
+    fn expect_ident_with_type(&mut self, ty: Type) -> (Token, Type) {
         let mut ty = ty.clone();
         while let Some(_) = self.consume_str("*") {
             ty = Type::Ptr(Box::new(ty));
@@ -105,30 +122,35 @@ impl<'a> AstBuilder<'a> {
                 ty = Type::Arr(Box::new(ty), n.i_value);
                 self.expect("]");
             }
-            self.offset_size += ty.size_of();
-            let segment_size =
-                if let Some(dest) = ty.dest_type() { dest.size_of() } else { ty.size_of() };
-            self.offset_size += segment_size - self.offset_size % segment_size;
-            self.offset_map.insert(t.s_value.clone(), (ty.clone(), self.offset_size));
-            let mut node = Node {
-                token: Some(t),
-                nt: NodeType::LVar,
-                cty: Some(ty),
-                offset: Some(self.offset_size),
-                ..Node::default()
-            };
-            if let Some(t) = self.consume_str("=") {
-                node = Node::new_with_op(
-                    Some(t),
-                    NodeType::Asg,
-                    node,
-                    self.assign());
-            }
-            node
+            (t, ty)
         } else {
             error_at(self.code, self.tokens[self.cur].pos, "ident expected");
             unreachable!();
         }
+    }
+    fn new_local_variable(&mut self, ty: Type) -> Node {
+        let (t, ty) = self.expect_ident_with_type(ty);
+        self.offset_size += ty.size_of();
+        let segment_size =
+            if let Some(dest) = ty.dest_type() { dest.size_of() } else { ty.size_of() };
+        self.offset_size += segment_size - self.offset_size % segment_size;
+
+        self.offset_map.insert(t.s_value.clone(), (ty.clone(), self.offset_size));
+        let mut node = Node {
+            token: Some(t),
+            nt: NodeType::LVar,
+            cty: Some(ty),
+            offset: Some(self.offset_size),
+            ..Node::default()
+        };
+        if let Some(t) = self.consume_str("=") {
+            node = Node::new_with_op(
+                Some(t),
+                NodeType::Asg,
+                node,
+                self.assign());
+        }
+        node
     }
     fn consume_type(&mut self) -> Option<Type> {
         if let Some(_) = self.consume_str("int") {
@@ -147,63 +169,59 @@ impl<'a> AstBuilder<'a> {
             unreachable!()
         }
     }
-    fn definition(&mut self) -> Node {
+    fn global_definition(&mut self) {
         self.offset_size = 0;
         self.offset_map = HashMap::new();
-        let mut ty = self.expect_type();
-        while let Some(_) = self.consume_str("*") {
-            ty = Type::Ptr(Box::new(ty));
-        }
-        if let Some(t) = self.consume_ident() {
-            if let Some(_) = self.consume_str("(") {
-                let mut args: Vec<Node> = Vec::new();
-                if let None = self.consume_str(")") {
+        let ty = self.expect_type();
+        let cur_to_back = self.cur;
+        let (t, return_type) = self.expect_ident_with_type(ty.clone());
+        if let Some(_) = self.consume_str("(") {
+            let mut args: Vec<Node> = Vec::new();
+            if let None = self.consume_str(")") {
+                let ty = self.expect_type();
+                args.push(self.new_local_variable(ty));
+                while let None = self.consume_str(")") {
+                    self.expect(",");
                     let ty = self.expect_type();
                     args.push(self.new_local_variable(ty));
-                    while let None = self.consume_str(")") {
-                        self.expect(",");
-                        let ty = self.expect_type();
-                        args.push(self.new_local_variable(ty));
-                    }
-                    if args.len() >= 7 {
-                        error_at(self.code, t.pos, "count of args must be less than 7")
-                    }
                 }
-                let arg_types: Vec<Type> = args.iter().map(
-                    |arg| { arg.resolve_type().clone().unwrap() }
-                ).collect();
-                self.function_types.insert(t.s_value.clone(), (arg_types, ty, true));
-                let s_value = t.s_value.clone();
-                if let Some(block) = self.consume_block() {
-                    return Node {
-                        token: Some(t),
-                        nt: NodeType::Df,
-                        global_name: String::from(s_value),
-                        body: Some(Box::new(block)),
-                        offset: Some(self.offset_size),
-                        args,
-                        ..Node::default()
-                    };
+                if args.len() >= 7 {
+                    error_at(self.code, t.pos, "count of args must be less than 7")
                 }
-            } else {
-                let ty = if let Some(_) = self.consume_str("[") {
-                    let n = self.expect_number();
-                    self.expect("]");
-                    Type::Arr(Box::new(ty), n.i_value)
-                } else { ty };
-                self.expect(";");
-                self.global_variables.insert(t.s_value.clone(), ty.clone());
-                return Node {
-                    token: Some(t.clone()),
-                    nt: NodeType::GVar,
-                    cty: Some(ty),
-                    global_name: t.s_value,
-                    ..Node::default()
-                };
             }
+            let arg_types: Vec<Type> = args.iter().map(
+                |arg| { arg.resolve_type().clone().unwrap() }
+            ).collect();
+            self.global_functions.insert(
+                t.s_value.clone(),
+                Func {
+                    arg_types: arg_types.iter().map(|ty| ty.clone() ).collect(),
+                    return_type: return_type.clone(),
+                    token: Some(t.clone()),
+                    ..Func::default()
+                });
+            let body = self.consume_block();
+            self.global_functions.insert(
+                t.s_value.clone(),
+                Func {
+                    body,
+                    arg_types,
+                    return_type,
+                    offset_size: self.offset_size,
+                    token: Some(t.clone()),
+                    args,
+                });
+        } else {
+            self.cur = cur_to_back; // back the cursor
+            loop {
+                let (t, ty) = self.expect_ident_with_type(ty.clone());
+                self.global_variables.insert(t.s_value.clone(), ty.clone());
+                if let None = self.consume_str(",") {
+                    break;
+                }
+            }
+            self.expect(";");
         }
-        error_at(self.code, self.tokens[self.cur].pos, "unexpected token");
-        unreachable!()
     }
     fn stmt(&mut self) -> Node {
         if let Some(t) = self.consume_str("if") {
@@ -403,28 +421,17 @@ impl<'a> AstBuilder<'a> {
             node
         } else if let Some(t) = self.consume_ident() {
             if let Some(_) = self.consume_str("(") {
-                if !self.function_types.contains_key(&t.s_value) {
+                if !self.global_functions.contains_key(&t.s_value) {
                     error_at(self.code, t.pos, "undefined function");
                 }
-                let (arg_types, ret_ty, is_enabled_arg_types_validation) = self.function_types.get(&t.s_value).unwrap().clone();
+                let return_type =
+                    self.global_functions.get(&t.s_value).unwrap().return_type.clone();
                 let mut args: Vec<Node> = Vec::new();
                 if let None = self.consume_str(")") {
                     args.push(self.expr());
                     while let None = self.consume_str(")") {
                         self.expect(",");
                         args.push(self.expr());
-                    }
-                    if is_enabled_arg_types_validation {
-                        if args.len() != arg_types.len() {
-                            error_at(self.code, t.pos, "invalid count of arguments");
-                        }
-                        /*
-                        for (n, arg_type) in args.iter().zip(arg_types) {
-                            if n.resolve_type() != Some(arg_type.clone()) {
-                                error_at(self.code, n.token.as_ref().unwrap().pos, "invalid type")
-                            }
-                        }
-                         */
                     }
                     if args.len() >= 7 {
                         error_at(self.code, t.pos, "count of args must be less than 7")
@@ -438,7 +445,7 @@ impl<'a> AstBuilder<'a> {
                     token: Some(t),
                     nt: NodeType::Cf,
                     global_name: String::from(s_value),
-                    cty: Some(ret_ty.clone()),
+                    cty: Some(return_type),
                     args,
                     ..Node::default()
                 }
@@ -511,3 +518,4 @@ impl<'a> AstBuilder<'a> {
         node
     }
 }
+
