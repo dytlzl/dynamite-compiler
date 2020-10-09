@@ -11,9 +11,13 @@ int assert(int expected, int actual) {
     }
     return 0;
 }
-
+// single line comment
 int fib_memo[47];
-char a;
+char a;//, aa;
+/*
+ * multiline comment
+ */
+
 
 int fib(int i) {
     if (i == 0) return 0;

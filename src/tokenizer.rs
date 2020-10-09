@@ -42,7 +42,7 @@ impl Tokenizer {
             }
         );
     }
-    pub fn tokenize(&mut self, code: &str) {	
+    pub fn tokenize(&mut self, code: &str) {
         let chars: Vec<(usize, char)> = code.char_indices().map(
             |(pos, ch)| { (pos, ch) }).collect();
         let mut i = 0;
@@ -51,7 +51,49 @@ impl Tokenizer {
                 ' ' | '\t' | '\n' => {
                     i += 1;
                 }
-                '+' | '-' | '*' | '/' | '%' | '(' | ')' |
+                '/' => {
+                    let pos = chars[i].0;
+                    let mut temp = String::from(chars[i].1);
+                    i += 1;
+                    match chars[i].1 {
+                        '/' => {
+                            loop {
+                                if i >= chars.len() {
+                                    error_at(code, i, "unexpected eof")
+                                }
+                                match chars[i].1 {
+                                    '\n' => {
+                                        i += 1;
+                                        break;
+                                    }
+                                    _ => {
+                                        temp.push(chars[i].1);
+                                        i += 1;
+                                    }
+                                }
+                            }
+                        }
+                        '*' => {
+                            loop {
+                                if i >= chars.len() - 1 {
+                                    error_at(code, chars.len(), "unexpected eof")
+                                }
+                                if chars[i].1 == '*' && chars[i + 1].1 == '/' {
+                                    i += 2;
+                                    break;
+                                } else {
+                                    temp.push(chars[i].1);
+                                    i += 1;
+                                }
+                            }
+                        }
+                        _ => {
+                            self.push_reserved_token(pos, String::from(chars[i].1));
+                            i += 1;
+                        }
+                    }
+                }
+                '+' | '-' | '*' | '%' | '(' | ')' |
                 ';' | '{' | '}' | ',' | '&' | '[' | ']' => {
                     let pos = chars[i].0;
                     self.push_reserved_token(pos, String::from(chars[i].1));
@@ -149,7 +191,7 @@ impl Tokenizer {
                         match chars[i].1 {
                             '"' => {
                                 i += 1;
-                                break
+                                break;
                             }
                             _ => {
                                 temp.push(chars[i].1);
