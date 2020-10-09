@@ -7,4 +7,4 @@ test-linux:
 	./test.sh -no-pie
 
 run:
-	cargo run "$(source)" > ./asm/main.s && cc -o ./bin/main ./asm/main.s "$(link)" && ./bin/main
+	cargo run ./temp/main.c > ./temp/main.s && cc -o ./temp/main ./temp/main.s && ./temp/main
