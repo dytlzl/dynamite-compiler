@@ -4,3 +4,6 @@ pub mod node;
 pub mod ast;
 pub mod generator;
 pub mod error;
+pub mod ctype;
+pub mod func;
+pub mod instruction;

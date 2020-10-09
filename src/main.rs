@@ -31,7 +31,7 @@ fn main() {
         let target_os = Os::MacOS;
     let mut generator = AsmGenerator::new(
         &builder, &code, target_os);
-    generator.gen().unwrap();
+    generator.gen();
     let asm = String::from_utf8(generator.buf).unwrap();
     print!("{}", &asm);
 }

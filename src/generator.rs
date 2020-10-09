@@ -1,8 +1,13 @@
 use std::io::Write;
-use crate::node::{Node, NodeType, Type};
+use crate::node::{Node, NodeType};
 use crate::error::{error, error_at};
 use std::collections::VecDeque;
-use crate::ast::{AstBuilder, Func};
+use crate::ast::{AstBuilder};
+use crate::ctype::Type;
+use crate::func::Func;
+use crate::instruction::{Instruction, InstOperator, InstOperand};
+use crate::instruction::{InstOperator::*, Register::*};
+use std::fmt::Display;
 
 pub struct AsmGenerator<'a> {
     code: &'a str,
@@ -12,6 +17,7 @@ pub struct AsmGenerator<'a> {
     loop_stack: VecDeque<usize>,
     builder: &'a AstBuilder<'a>,
     current_stack_size: usize,
+    pub instructions: Vec<Instruction>,
 }
 
 pub enum Os {
@@ -31,349 +37,379 @@ impl<'a> AsmGenerator<'a> {
             branch_count: 0,
             loop_stack: VecDeque::new(),
             current_stack_size: 0,
+            instructions: Vec::new(),
         }
     }
 
-    pub fn gen(&mut self) -> std::io::Result<()> {
-        writeln!(self.buf, ".intel_syntax noprefix")?;
-        writeln!(self.buf)?;
+    pub fn gen(&mut self) {
+        self.writeln(".intel_syntax noprefix");
         if let Os::MacOS = self.target_os {
-            writeln!(self.buf, ".section __TEXT,__text,regular,pure_instructions")?;
+            self.writeln(".section __TEXT,__text,regular,pure_instructions");
         }
         for (s, f) in &self.builder.global_functions {
-            self.gen_func(s, f)?;
+            self.gen_func(s, f);
         }
         if self.builder.global_variables.len() != 0 {
             if let Os::MacOS = self.target_os {
-                writeln!(self.buf, ".section __DATA,__data",)?;
+                self.writeln(".section __DATA,__data");
             } else {
-                writeln!(self.buf, ".section .data",)?;
+                self.writeln(".section .data");
             }
         }
         for (s, t) in &self.builder.global_variables {
-            self.gen_global_variable(s, t.clone())?;
+            self.gen_global_variable(s, t.clone());
         }
-        self.gen_string_literals()?;
-        Ok(())
+        self.gen_string_literals();
     }
 
-    pub fn gen_string_literals(&mut self) -> std::io::Result<()> {
+    pub fn gen_string_literals(&mut self) {
         if self.builder.string_literals.len() != 0 {
             if let Os::MacOS = self.target_os {
-                writeln!(self.buf, ".section __TEXT,__cstring,cstring_literals")?;
+                self.writeln(".section __TEXT,__cstring,cstring_literals");
             } else {
-                writeln!(self.buf, ".section .data")?;
+                self.writeln(".section .data");
             }
             for (i, str) in self.builder.string_literals.iter().enumerate() {
-                writeln!(self.buf, "L_.str.{}:", i)?;
-                writeln!(self.buf, "  .asciz \"{}\"", str)?;
+                self.writeln(format!("L_.str.{}:", i));
+                self.writeln(format!("  .asciz \"{}\"", str));
             }
         }
-        Ok(())
     }
 
-    pub fn gen_global_variable(&mut self, name: &str, ty: Type) -> std::io::Result<()> {
-        let prefix = if let Os::MacOS = self.target_os { "_" } else { "" };
-        writeln!(self.buf, "{}{}:", prefix, name)?;
+    pub fn gen_global_variable(&mut self, name: &str, ty: Type) {
+        self.writeln(format!("{}:", self.with_prefix(name)));
         match ty {
             Type::Arr(_, _) => {
-                writeln!(self.buf, "  .zero {}", ty.size_of())?;
-            },
+                self.writeln(format!("  .zero {}", ty.size_of()));
+            }
             Type::Int => {
-                writeln!(self.buf, "  .int 0")?;
+                self.writeln("  .int 0");
             }
             Type::Char => {
-                writeln!(self.buf, "  .byte 0")?;
+                self.writeln("  .byte 0");
             }
             _ => {
-                writeln!(self.buf, "  .long 0")?;
-            },
+                self.writeln("  .long 0");
+            }
         }
-        writeln!(self.buf)?;
-        Ok(())
     }
 
-    pub fn gen_func(&mut self, name: &str, func: &Func) -> std::io::Result<()> {
+    pub fn gen_func(&mut self, name: &str, func: &Func) {
         if let None = func.body {
-            return Ok(())
+            return;
         }
-        let prefix = if let Os::MacOS = self.target_os { "_" } else { "" };
-        writeln!(self.buf, ".globl {}{}", prefix, name)?;
-        writeln!(self.buf, "{}{}:", prefix, name)?;
+        self.writeln(format!(".globl {}", self.with_prefix(name)));
+        self.writeln(format!("{}:", self.with_prefix(name)));
 
         // prologue
-        writeln!(self.buf, "  push rbp")?;
-        writeln!(self.buf, "  mov rbp, rsp")?;
-        writeln!(self.buf, "  sub rsp, {}", func.offset_size)?;
+        self.inst1(PUSH, RBP);
+        self.inst2(MOV, RBP, RSP);
+        self.inst2(SUB, RSP, func.offset_size);
         for (i, arg) in func.args.iter().enumerate() {
             if let NodeType::LVar = arg.nt {
-                writeln!(self.buf, "  mov rax, rbp")?;
-                writeln!(self.buf, "  sub rax, {}", arg.offset.unwrap())?;
-                writeln!(self.buf, "  mov [rax], {}", ARGS_REG[i])?;
+                self.inst2(MOV, RAX, RBP);
+                self.inst2(SUB, RAX, arg.offset.unwrap());
+                self.inst2(MOV, "[rax]", ARGS_REG[i]);
             } else {
                 error_at(self.code, arg.token.as_ref().unwrap().pos, "ident expected");
             }
         }
         self.current_stack_size = func.offset_size;
-        self.gen_with_node(func.body.as_ref().unwrap())?;
-        self.epilogue()?;
-        writeln!(self.buf)?;
-        Ok(())
+        self.gen_with_node(func.body.as_ref().unwrap());
+        self.epilogue();
     }
 
-    fn epilogue(&mut self) -> std::io::Result<()> {
-        writeln!(self.buf, "  mov rsp, rbp")?;
-        writeln!(self.buf, "  pop rbp")?;
-        writeln!(self.buf, "  ret")?;
-        Ok(())
+    fn epilogue(&mut self) {
+        self.inst2(MOV, RSP, RBP);
+        self.inst1(POP, RBP);
+        self.inst0(RET);
     }
 
-    fn gen_with_node(&mut self, node: &Node) -> std::io::Result<()> {
+    fn gen_with_node(&mut self, node: &Node) {
         match node.nt {
             NodeType::DefVar => {
-                self.gen_with_vec(&node.children)?;
-                return Ok(());
+                self.gen_with_vec(&node.children);
+                return;
             }
             NodeType::Cf => {
-                writeln!(self.buf, "  mov rax, rsp")?;
-                writeln!(self.buf, "  add rax, 8")?;
-                writeln!(self.buf, "  mov rdi, 16")?;
-                writeln!(self.buf, "  cqo\n  idiv rdi")?;
-                writeln!(self.buf, "  sub rsp, rdx")?;
-                writeln!(self.buf, "  push rdx")?;
+                self.inst2(MOV, RAX, RSP);
+                self.inst2(ADD, RAX, 8);
+                self.inst2(MOV, RDI, 16);
+                self.inst0(CQO);
+                self.inst1(IDIV, RDI);
+                self.inst2(SUB, RSP, RDX);
+                self.inst1(PUSH, RDX);
                 for node in &node.args {
-                    self.gen_with_node(node)?;
+                    self.gen_with_node(node);
                 }
                 for i in 0..node.args.len() {
-                    self.pop(ARGS_REG[i])?;
+                    self.inst1(POP, ARGS_REG[i]);
                 }
-                let prefix = if let Os::MacOS = self.target_os { "_" } else { "" };
-                writeln!(self.buf, "  call {}{}", prefix, &node.global_name)?;
-                writeln!(self.buf, "  pop rdi")?;
-                writeln!(self.buf, "  add rsp, rdi")?;
-                self.push("rax")?;
-                return Ok(());
+                self.inst1(CALL, self.with_prefix(&node.global_name));
+                self.inst1(POP, RDI);
+                self.inst2(ADD, RSP, RDI);
+                self.inst1(PUSH, RAX);
+                return;
             }
             NodeType::If => {
                 let branch_num = self.new_branch_num();
-                self.gen_with_node(node.cond.as_ref().unwrap())?;
-                self.pop_rax()?;
-                writeln!(self.buf, "  cmp rax, 0")?;
-                writeln!(self.buf, "  je .Lelse{}", branch_num)?;
-                self.gen_with_node(node.then.as_ref().unwrap())?;
-                writeln!(self.buf, "  jmp .Lend{}", branch_num)?;
-                writeln!(self.buf, ".Lelse{}:", branch_num)?;
+                self.gen_with_node(node.cond.as_ref().unwrap());
+                self.inst1(POP, RAX);
+                self.inst2(CMP, RAX, 0);
+                self.inst1(JE, else_flag(branch_num));
+                self.gen_with_node(node.then.as_ref().unwrap());
+                self.inst1(JMP, end_flag(branch_num));
+                self.writeln(format!(".Lelse{}:", branch_num));
                 if let Some(_) = node.els {
-                    self.gen_with_node(node.els.as_ref().unwrap())?;
+                    self.gen_with_node(node.els.as_ref().unwrap());
                 }
-                writeln!(self.buf, ".Lend{}:", branch_num)?;
-                return Ok(());
+                self.writeln(format!(".Lend{}:", branch_num));
+                return;
             }
             NodeType::Whl => {
                 let branch_num = self.new_branch_num();
                 self.loop_stack.push_back(branch_num);
-                writeln!(self.buf, ".Lbegin{}:", branch_num)?;
-                self.reset_stack()?;
-                self.gen_with_node(node.cond.as_ref().unwrap())?;
-                self.pop_rax()?;
-                writeln!(self.buf, "  cmp rax, 0")?;
-                writeln!(self.buf, "  je .Lend{}", branch_num)?;
-                self.gen_with_node(node.then.as_ref().unwrap())?;
-                writeln!(self.buf, "  jmp .Lbegin{}", branch_num)?;
-                writeln!(self.buf, ".Lend{}:", branch_num)?;
+                self.writeln(format!(".Lbegin{}:", branch_num));
+                self.reset_stack();
+                self.gen_with_node(node.cond.as_ref().unwrap());
+                self.inst1(POP, RAX);
+                self.inst2(CMP, RAX, 0);
+                self.inst1(JE, end_flag(branch_num));
+                self.gen_with_node(node.then.as_ref().unwrap());
+                self.inst1(JMP, begin_flag(branch_num));
+                self.writeln(format!(".Lend{}:", branch_num));
                 self.loop_stack.pop_back();
-                return Ok(());
+                return;
             }
             NodeType::For => {
                 let branch_num = self.new_branch_num();
                 self.loop_stack.push_back(branch_num);
                 if let Some(_) = node.ini {
-                    self.gen_with_node(node.ini.as_ref().unwrap())?;
-                    self.pop_rax()?;
+                    self.gen_with_node(node.ini.as_ref().unwrap());
+                    self.inst1(POP, RAX);
                 }
-                writeln!(self.buf, ".Lbegin{}:", branch_num)?;
-                self.reset_stack()?;
+                self.writeln(format!(".Lbegin{}:", branch_num));
+                self.reset_stack();
                 if let Some(_) = node.cond {
-                    self.gen_with_node(node.cond.as_ref().unwrap())?;
-                    self.pop_rax()?;
+                    self.gen_with_node(node.cond.as_ref().unwrap());
+                    self.inst1(POP, RAX);
                 } else {
-                    writeln!(self.buf, "  mov rax, 1")?;
+                    self.inst2(MOV, RAX, 1);
                 }
-                writeln!(self.buf, "  cmp rax, 0")?;
-                writeln!(self.buf, "  je .Lend{}", branch_num)?;
-                self.gen_with_node(node.then.as_ref().unwrap())?;
+                self.inst2(CMP, RAX, 0);
+                self.inst1(JE, end_flag(branch_num));
+                self.gen_with_node(node.then.as_ref().unwrap());
                 if let Some(_) = node.upd {
-                    self.gen_with_node(node.upd.as_ref().unwrap())?;
-                    self.pop_rax()?;
+                    self.gen_with_node(node.upd.as_ref().unwrap());
+                    self.inst1(POP, RAX);
                 }
-                writeln!(self.buf, "  jmp .Lbegin{}", branch_num)?;
-                writeln!(self.buf, ".Lend{}:", branch_num)?;
+                self.inst1(JMP, begin_flag(branch_num));
+                self.writeln(format!(".Lend{}:", branch_num));
                 self.loop_stack.pop_back();
-                return Ok(());
+                return;
             }
             NodeType::Block => {
-                self.gen_with_vec(&node.children)?;
-                return Ok(());
+                self.gen_with_vec(&node.children);
+                return;
             }
             NodeType::Brk => {
-                if let Some(branch_num) = self.loop_stack.back() {
-                    writeln!(self.buf, "  jmp .Lend{}", branch_num)?;
+                if let Some(&branch_num) = self.loop_stack.back() {
+                    self.inst1(JMP, end_flag(branch_num.clone()));
                 } else {
                     error_at(self.code, node.token.as_ref().unwrap().pos, "unexpected break found");
                 }
-                return Ok(());
+                return;
             }
             NodeType::Ret => {
-                self.gen_with_node(node.lhs.as_ref().unwrap())?;
-                self.pop_rax()?;
-                self.epilogue()?;
-                return Ok(());
+                self.gen_with_node(node.lhs.as_ref().unwrap());
+                self.inst1(POP, RAX);
+                self.epilogue();
+                return;
             }
             NodeType::Num => {
-                self.push(node.value.unwrap())?;
-                return Ok(());
+                self.inst1(PUSH, node.value.unwrap());
+                return;
             }
             NodeType::LVar | NodeType::GVar => {
-                self.gen_addr(node)?;
+                self.gen_addr(node);
                 if let Some(Type::Arr(_, _)) = node.resolve_type() {
-                    return Ok(());
+                    return;
                 }
-                self.pop_rax()?;
-                self.deref_rax(node)?;
-                self.push("rax")?;
-                return Ok(());
+                self.inst1(POP, RAX);
+                self.deref_rax(node);
+                self.inst1(PUSH, RAX);
+                return;
             }
             NodeType::Addr => {
-                self.gen_addr(node.lhs.as_ref().unwrap())?;
-                return Ok(());
+                self.gen_addr(node.lhs.as_ref().unwrap());
+                return;
             }
             NodeType::Deref => {
-                self.gen_with_node(node.lhs.as_ref().unwrap())?;
-                self.pop_rax()?;
-                self.deref_rax(node)?;
-                self.push("rax")?;
-                return Ok(());
+                self.gen_with_node(node.lhs.as_ref().unwrap());
+                self.inst1(POP, RAX);
+                self.deref_rax(node);
+                self.inst1(PUSH, RAX);
+                return;
             }
             NodeType::Asg => {
-                self.gen_addr(node.lhs.as_ref().unwrap())?;
-                self.gen_with_node(node.rhs.as_ref().unwrap())?;
-                self.pop_rdi()?;
-                self.pop_rax()?;
+                self.gen_addr(node.lhs.as_ref().unwrap());
+                self.gen_with_node(node.rhs.as_ref().unwrap());
+                self.inst1(POP, RDI);
+                self.inst1(POP, RAX);
                 match node.lhs.as_ref().unwrap().resolve_type() {
                     Some(Type::Int) => {
-                        writeln!(self.buf, "  mov dword ptr[rax], edi")?;
-                    },
+                        self.inst2(MOV, ptr_with_size(RAX, 4), EDI);
+                    }
                     Some(Type::Char) => {
-                        writeln!(self.buf, "  mov byte ptr[rax], dil")?;
-                    },
+                        self.inst2(MOV, ptr_with_size(RAX, 1), DIL);
+                    }
                     _ => {
-                        writeln!(self.buf, "  mov qword ptr[rax], rdi")?;
-                    },
+                        self.inst2(MOV, ptr_with_size(RAX, 8), RDI);
+                    }
                 }
-                self.push("rdi")?;
-                return Ok(());
+                self.inst1(PUSH, RDI);
+                return;
             }
             _ => {}
         }
-        self.gen_with_node(node.lhs.as_ref().unwrap())?;
-        self.gen_with_node(node.rhs.as_ref().unwrap())?;
-        self.pop_rdi()?;
-        self.pop_rax()?;
+        self.gen_with_node(node.lhs.as_ref().unwrap());
+        self.gen_with_node(node.rhs.as_ref().unwrap());
+        self.inst1(POP, RDI);
+        self.inst1(POP, RAX);
         match node.nt {
             NodeType::Add => {
                 if let Some(t) = node.lhs.as_ref().unwrap().dest_type() {
-                    writeln!(self.buf, "  imul rdi, {}", t.size_of())?;
+                    self.inst2(IMUL, RDI, t.size_of());
                 } else if let Some(t) = node.rhs.as_ref().unwrap().dest_type() {
-                    writeln!(self.buf, "  imul rax, {}", t.size_of())?;
+                    self.inst2(IMUL, RAX, t.size_of());
                 }
-                writeln!(self.buf, "  add rax, rdi")?;
+                self.inst2(ADD, RAX, RDI);
             }
             NodeType::Sub => {
                 if let Some(t) = node.lhs.as_ref().unwrap().dest_type() {
-                    writeln!(self.buf, "  imul rdi, {}", t.size_of())?;
+                    self.inst2(IMUL, RDI, t.size_of());
                 }
-                writeln!(self.buf, "  sub rax, rdi")?;
+                self.inst2(SUB, RAX, RDI);
             }
             NodeType::Mul => {
-                writeln!(self.buf, "  imul rax, rdi")?;
+                self.inst2(IMUL, RAX, RDI);
             }
             NodeType::Div => {
-                writeln!(self.buf, "  cqo\n  idiv rdi")?;
+                self.inst0(CQO);
+                self.inst1(IDIV, RDI);
             }
             NodeType::Mod => {
-                writeln!(self.buf, "  cqo\n  idiv rdi")?;
-                self.push("rdx")?;
-                return Ok(());
+                self.inst0(CQO);
+                self.inst1(IDIV, RDI);
+                self.inst1(PUSH, RDX);
+                return;
             }
             NodeType::Eq | NodeType::Ne | NodeType::Lt | NodeType::Le => {
-                writeln!(
-                    self.buf,
-                    "  cmp rax, rdi\n  {} al\n  {} rax, al",
-                    match node.nt {
-                        NodeType::Eq => "sete",
-                        NodeType::Ne => "setne",
-                        NodeType::Lt => "setl",
-                        NodeType::Le => "setle",
-                        _ => unreachable!()
-                    },
-                    if let Os::MacOS = self.target_os { "movzx" } else { "movzb" })?;
+                self.inst2(CMP, RAX, RDI);
+                self.inst1(match node.nt {
+                    NodeType::Eq => SETE,
+                    NodeType::Ne => SETNE,
+                    NodeType::Lt => SETL,
+                    NodeType::Le => SETLE,
+                    _ => unreachable!()
+                }, AL);
+                self.inst2(MOVZX, RAX, AL);
             }
             _ => {
                 error("unexpected node");
             }
         }
-        self.push("rax")?;
-        Ok(())
+        self.inst1(PUSH, RAX);
     }
 
-    fn gen_with_vec(&mut self, v: &Vec<Node>) -> std::io::Result<()> {
+    fn gen_with_vec(&mut self, v: &Vec<Node>) {
         for node in v {
-            self.gen_with_node(node)?;
-            self.pop_rax()?;
-            self.reset_stack()?;
+            self.gen_with_node(node);
+            self.inst1(POP, RAX);
+            self.reset_stack();
         }
-        Ok(())
     }
 
-    fn gen_addr(&mut self, node: &Node) -> std::io::Result<()> {
+    fn gen_addr(&mut self, node: &Node) {
         match node.nt {
             NodeType::GVar => {
                 if node.dest != "" {
-                    writeln!(self.buf, "  lea rax, [rip + {}]", node.dest)?;
+                    self.inst2(LEA, RAX, ptr_with_offset(RIP, &node.dest));
                 } else {
-                    let prefix = if let Os::MacOS = self.target_os { "_" } else { "" };
-                    writeln!(self.buf, "  lea rax, [rip + {}{}]", prefix, node.global_name)?;
+                    self.inst2(LEA, RAX,
+                               ptr_with_offset(RIP, self.with_prefix(&node.global_name)));
                 }
-                self.push("rax")?;
+                self.inst1(PUSH, RAX);
             }
             NodeType::LVar => {
-                writeln!(self.buf, "  mov rax, rbp")?;
-                writeln!(self.buf, "  sub rax, {}", node.offset.unwrap())?;
-                self.push("rax")?;
+                self.inst2(MOV, RAX, RBP);
+                self.inst2(SUB, RAX, node.offset.unwrap());
+                self.inst1(PUSH, RAX);
             }
             NodeType::Deref => {
-                self.gen_with_node(node.lhs.as_ref().unwrap())?;
+                self.gen_with_node(node.lhs.as_ref().unwrap());
             }
             _ => {
                 unreachable!();
             }
         }
-        Ok(())
     }
 
-    fn deref_rax(&mut self, node: &Node) -> std::io::Result<()> {
+    fn deref_rax(&mut self, node: &Node) {
         match node.resolve_type() {
             Some(Type::Int) => {
-                writeln!(self.buf, "  movsxd rax, dword ptr[rax]")?;
-            },
+                self.inst2(MOVSXD, RAX, ptr_with_size(RAX, 4));
+            }
             Some(Type::Char) => {
-                writeln!(self.buf, "  movsx rax, byte ptr[rax]")?;
-            },
+                self.inst2(MOVSX, RAX, ptr_with_size(RAX, 1));
+            }
             _ => {
-                writeln!(self.buf, "  mov rax, qword ptr[rax]")?;
-            },
+                self.inst2(MOV, RAX, ptr_with_size(RAX, 8));
+            }
         }
-        Ok(())
+    }
+
+    fn inst0(&mut self, operator: InstOperator) {
+        writeln!(
+            self.buf, "  {}",
+            if let Os::MacOS = self.target_os { operator.to_string() } else { operator.to_string_for_linux() }
+        ).unwrap();
+        self.instructions.push(
+            Instruction { operator, operand1: None, operand2: None }
+        )
+    }
+    fn inst1<T1>(&mut self, operator: InstOperator, operand1: T1) where
+        T1: Into<InstOperand> + std::fmt::Display {
+        writeln!(
+            self.buf,
+            "  {} {}",
+            if let Os::MacOS = self.target_os { operator.to_string() } else { operator.to_string_for_linux() },
+            operand1
+        ).unwrap();
+        self.instructions.push(
+            Instruction { operator, operand1: Some(operand1.into()), operand2: None }
+        )
+    }
+    fn inst2<T1, T2>(&mut self, operator: InstOperator, operand1: T1, operand2: T2) where
+        T1: Into<InstOperand> + std::fmt::Display, T2: Into<InstOperand> + std::fmt::Display {
+        writeln!(
+            self.buf,
+            "  {} {}, {}",
+            if let Os::MacOS = self.target_os { operator.to_string() } else { operator.to_string_for_linux() },
+            operand1,
+            operand2
+        ).unwrap();
+        self.instructions.push(
+            Instruction { operator, operand1: Some(operand1.into()), operand2: Some(operand2.into()) }
+        )
+    }
+
+    fn writeln(&mut self, s: impl Display) {
+        writeln!(self.buf, "{}", s).unwrap();
+    }
+
+    fn with_prefix<T: Display>(&self, s: T) -> String {
+        format!("{}{}", if let Os::MacOS = self.target_os { "_" } else { "" }, s)
     }
 
     fn new_branch_num(&mut self) -> usize {
@@ -381,29 +417,33 @@ impl<'a> AsmGenerator<'a> {
         self.branch_count
     }
 
-    fn pop_rax(&mut self) -> std::io::Result<()> {
-        writeln!(self.buf, "  pop rax")?;
-        Ok(())
+    fn reset_stack(&mut self) {
+        self.inst2(MOV, RSP, RBP);
+        self.inst2(SUB, RSP, self.current_stack_size);
     }
+}
 
-    fn pop_rdi(&mut self) -> std::io::Result<()> {
-        writeln!(self.buf, "  pop rdi")?;
-        Ok(())
-    }
+fn ptr_with_offset(a: impl Display, b: impl Display) -> String {
+    format!("[{} + {}]", a, b)
+}
 
-    fn pop<T: std::fmt::Display>(&mut self, v: T) -> std::io::Result<()> {
-        writeln!(self.buf, "  pop {}", v)?;
-        Ok(())
-    }
+fn else_flag(branch_number: usize) -> String {
+    format!(".Lelse{}", branch_number)
+}
 
-    fn push<T: std::fmt::Display>(&mut self, v: T) -> std::io::Result<()> {
-        writeln!(self.buf, "  push {}", v)?;
-        Ok(())
-    }
+fn end_flag(branch_number: usize) -> String {
+    format!(".Lend{}", branch_number)
+}
 
-    fn reset_stack(&mut self) -> std::io::Result<()> {
-        writeln!(self.buf, "  mov rsp, rbp")?;
-        writeln!(self.buf, "  sub rsp, {}", self.current_stack_size)?;
-        Ok(())
+fn begin_flag(branch_number: usize) -> String {
+    format!(".Lbegin{}", branch_number)
+}
+
+fn ptr_with_size(ptr: impl Display, size: usize) -> String {
+    match size {
+        4 => format!("dword ptr[{}]", ptr),
+        1 => format!("byte ptr[{}]", ptr),
+        8 => format!("qword ptr[{}]", ptr),
+        _ => unreachable!()
     }
 }

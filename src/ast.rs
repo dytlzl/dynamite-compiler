@@ -1,7 +1,9 @@
 use crate::token::{Token, TokenType};
-use crate::node::{Node, NodeType, Type};
+use crate::node::{Node, NodeType};
 use crate::error::{error_at};
 use std::collections::HashMap;
+use crate::ctype::Type;
+use crate::func::Func;
 
 pub struct AstBuilder<'a> {
     code: &'a str,
@@ -12,16 +14,6 @@ pub struct AstBuilder<'a> {
     pub global_functions: HashMap<String, Func>,
     pub global_variables: HashMap<String, Type>,
     pub string_literals: Vec<String>,
-}
-
-#[derive(Default)]
-pub struct Func {
-    pub body: Option<Node>,
-    pub arg_types: Vec<Type>,
-    pub return_type: Type,
-    pub offset_size: usize,
-    pub token: Option<Token>,
-    pub args: Vec<Node>,
 }
 
 impl<'a> AstBuilder<'a> {
@@ -195,7 +187,7 @@ impl<'a> AstBuilder<'a> {
             self.global_functions.insert(
                 t.s_value.clone(),
                 Func {
-                    arg_types: arg_types.iter().map(|ty| ty.clone() ).collect(),
+                    arg_types: arg_types.iter().map(|ty| ty.clone()).collect(),
                     return_type: return_type.clone(),
                     token: Some(t.clone()),
                     ..Func::default()
