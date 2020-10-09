@@ -43,6 +43,13 @@ impl<'a> AsmGenerator<'a> {
         for (s, f) in &self.builder.global_functions {
             self.gen_func(s, f)?;
         }
+        if self.builder.global_variables.len() != 0 {
+            if let Os::MacOS = self.target_os {
+                writeln!(self.buf, ".section __DATA,__data",)?;
+            } else {
+                writeln!(self.buf, ".section .data",)?;
+            }
+        }
         for (s, t) in &self.builder.global_variables {
             self.gen_global_variable(s, t.clone())?;
         }
@@ -66,11 +73,6 @@ impl<'a> AsmGenerator<'a> {
     }
 
     pub fn gen_global_variable(&mut self, name: &str, ty: Type) -> std::io::Result<()> {
-        if let Os::MacOS = self.target_os {
-            writeln!(self.buf, ".section __DATA,__data",)?;
-        } else {
-            writeln!(self.buf, ".section .data",)?;
-        }
         let prefix = if let Os::MacOS = self.target_os { "_" } else { "" };
         writeln!(self.buf, "{}{}:", prefix, name)?;
         match ty {
