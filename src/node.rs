@@ -25,6 +25,7 @@ pub enum NodeType {
     Df,
     Addr,
     Deref,
+    DefVar,
 }
 
 impl Default for NodeType {

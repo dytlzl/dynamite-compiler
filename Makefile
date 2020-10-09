@@ -7,10 +7,10 @@ test-linux:
 	cargo build
 	./test/test.sh -no-pie
 
-SRC := ./temp/main.c
+src := ./temp/main.c
 
 compile:
-	cargo run $(SRC) > ./temp/main.s
+	cargo run $(src) > ./temp/main.s
 
 assemble:
 	cc -o ./temp/main ./temp/main.s

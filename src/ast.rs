@@ -28,15 +28,15 @@ impl<'a> AstBuilder<'a> {
         };
         builder.function_types.insert(
             String::from("printf"),
-            (vec![Type::Ptr(Box::new(Type::Char))], Type::Int, false)
+            (vec![Type::Ptr(Box::new(Type::Char))], Type::Int, false),
         );
         builder.function_types.insert(
             String::from("exit"),
-            (vec![Type::Int], Type::Int, false)
+            (vec![Type::Int], Type::Int, true),
         );
         builder
     }
-    fn consume_reserved(&mut self, s_value: &str) -> Option<Token> {
+    fn consume_str(&mut self, s_value: &str) -> Option<Token> {
         if let TokenType::Reserved = self.tokens[self.cur].tt {
             if self.tokens[self.cur].s_value == s_value {
                 self.cur += 1;
@@ -94,30 +94,46 @@ impl<'a> AstBuilder<'a> {
         }
         v
     }
-    fn new_local_variable(&mut self) -> Node {
-        let mut ty = self.expect_type();
-        while let Some(_) = self.consume_reserved("*") {
+    fn new_local_variable(&mut self, ty: Type) -> Node {
+        let mut ty = ty.clone();
+        while let Some(_) = self.consume_str("*") {
             ty = Type::Ptr(Box::new(ty));
         }
         if let Some(t) = self.consume_ident() {
-            self.offset_size += 8;
+            if let Some(_) = self.consume_str("[") {
+                let n = self.expect_number();
+                ty = Type::Arr(Box::new(ty), n.i_value);
+                self.expect("]");
+            }
+            self.offset_size += ty.size_of();
+            let segment_size =
+                if let Some(dest) = ty.dest_type() { dest.size_of() } else { ty.size_of() };
+            self.offset_size += segment_size - self.offset_size % segment_size;
             self.offset_map.insert(t.s_value.clone(), (ty.clone(), self.offset_size));
-            return Node {
+            let mut node = Node {
                 token: Some(t),
                 nt: NodeType::LVar,
                 cty: Some(ty),
                 offset: Some(self.offset_size),
                 ..Node::default()
             };
+            if let Some(t) = self.consume_str("=") {
+                node = Node::new_with_op(
+                    Some(t),
+                    NodeType::Asg,
+                    node,
+                    self.assign());
+            }
+            node
         } else {
             error_at(self.code, self.tokens[self.cur].pos, "ident expected");
             unreachable!();
         }
     }
     fn consume_type(&mut self) -> Option<Type> {
-        if let Some(_) = self.consume_reserved("int") {
+        if let Some(_) = self.consume_str("int") {
             Some(Type::Int)
-        } else if let Some(_) = self.consume_reserved("char") {
+        } else if let Some(_) = self.consume_str("char") {
             Some(Type::Char)
         } else {
             None
@@ -135,17 +151,19 @@ impl<'a> AstBuilder<'a> {
         self.offset_size = 0;
         self.offset_map = HashMap::new();
         let mut ty = self.expect_type();
-        while let Some(_) = self.consume_reserved("*") {
+        while let Some(_) = self.consume_str("*") {
             ty = Type::Ptr(Box::new(ty));
         }
         if let Some(t) = self.consume_ident() {
-            if let Some(_) = self.consume_reserved("(") {
+            if let Some(_) = self.consume_str("(") {
                 let mut args: Vec<Node> = Vec::new();
-                if let None = self.consume_reserved(")") {
-                    args.push(self.new_local_variable());
-                    while let None = self.consume_reserved(")") {
+                if let None = self.consume_str(")") {
+                    let ty = self.expect_type();
+                    args.push(self.new_local_variable(ty));
+                    while let None = self.consume_str(")") {
                         self.expect(",");
-                        args.push(self.new_local_variable());
+                        let ty = self.expect_type();
+                        args.push(self.new_local_variable(ty));
                     }
                     if args.len() >= 7 {
                         error_at(self.code, t.pos, "count of args must be less than 7")
@@ -168,11 +186,11 @@ impl<'a> AstBuilder<'a> {
                     };
                 }
             } else {
-                if let Some(_) = self.consume_reserved("[") {
+                let ty = if let Some(_) = self.consume_str("[") {
                     let n = self.expect_number();
-                    ty = Type::Arr(Box::new(ty), n.i_value);
                     self.expect("]");
-                }
+                    Type::Arr(Box::new(ty), n.i_value)
+                } else { ty };
                 self.expect(";");
                 self.global_variables.insert(t.s_value.clone(), ty.clone());
                 return Node {
@@ -188,37 +206,43 @@ impl<'a> AstBuilder<'a> {
         unreachable!()
     }
     fn stmt(&mut self) -> Node {
-        if let Some(t) = self.consume_reserved("if") {
+        if let Some(t) = self.consume_str("if") {
             self.expect("(");
             let cond = self.expr();
             self.expect(")");
             let then = self.stmt();
             let mut els: Option<Node> = None;
-            if let Some(_) = self.consume_reserved("else") {
+            if let Some(_) = self.consume_str("else") {
                 els = Some(self.stmt());
             }
             return Node::new_if_node(Some(t), cond, then, els);
         }
-        if let Some(t) = self.consume_reserved("while") {
+        if let Some(t) = self.consume_str("while") {
             self.expect("(");
             let cond = self.expr();
             self.expect(")");
             return Node::new_while_node(Some(t), cond, self.stmt());
         }
-        if let Some(t) = self.consume_reserved("for") {
+        if let Some(t) = self.consume_str("for") {
             self.expect("(");
             let mut ini: Option<Node> = None;
             let mut cond: Option<Node> = None;
             let mut upd: Option<Node> = None;
-            if let None = self.consume_reserved(";") {
-                ini = Some(self.expr());
+            if let None = self.consume_str(";") {
+                ini = Some(
+                    if let Some(ty) = self.consume_type() {
+                        self.define_local_variable(ty)
+                    } else {
+                        self.expr()
+                    }
+                );
                 self.expect(";");
             }
-            if let None = self.consume_reserved(";") {
+            if let None = self.consume_str(";") {
                 cond = Some(self.expr());
                 self.expect(";");
             }
-            if let None = self.consume_reserved(")") {
+            if let None = self.consume_str(")") {
                 upd = Some(self.expr());
                 self.expect(")");
             }
@@ -227,55 +251,15 @@ impl<'a> AstBuilder<'a> {
         if let Some(node) = self.consume_block() {
             return node;
         }
-        let node = if let Some(mut ty) = self.consume_type() {
-            while let Some(_) = self.consume_reserved("*") {
-                ty = Type::Ptr(Box::new(ty));
-            }
-            if let Some(t) = self.consume_ident() {
-                if let Some(_) = self.consume_reserved("[") {
-                    let n = self.expect_number();
-                    let size = n.i_value * ty.size_of();
-                    ty = Type::Arr(Box::new(ty), n.i_value);
-                    self.offset_size += size;
-                    self.offset_map.insert(t.s_value.clone(), (ty.clone(), self.offset_size));
-                    self.expect("]");
-                    Node {
-                        token: Some(t),
-                        nt: NodeType::LVar,
-                        cty: Some(ty),
-                        offset: Some(self.offset_size),
-                        ..Node::default()
-                    }
-                } else {
-                    self.offset_size += 8;
-                    self.offset_map.insert(t.s_value.clone(), (ty.clone(), self.offset_size));
-                    let mut node = Node {
-                        token: Some(t),
-                        nt: NodeType::LVar,
-                        cty: Some(ty),
-                        offset: Some(self.offset_size),
-                        ..Node::default()
-                    };
-                    if let Some(t) = self.consume_reserved("=") {
-                        node = Node::new_with_op(
-                            Some(t),
-                            NodeType::Asg,
-                            node,
-                            self.assign());
-                    }
-                    node
-                }
-            } else {
-                error_at(self.code, self.tokens[self.cur].pos, "ident expected");
-                unreachable!();
-            }
-        } else if let Some(t) = self.consume_reserved("break") {
+        let node = if let Some(ty) = self.consume_type() {
+            self.define_local_variable(ty)
+        } else if let Some(t) = self.consume_str("break") {
             Node {
                 token: Some(t),
                 nt: NodeType::Brk,
                 ..Node::default()
             }
-        } else if let Some(t) = self.consume_reserved("return") {
+        } else if let Some(t) = self.consume_str("return") {
             Node::new_with_op_and_lhs(Some(t), NodeType::Ret, self.expr())
         } else {
             self.expr()
@@ -283,10 +267,26 @@ impl<'a> AstBuilder<'a> {
         self.expect(";");
         node
     }
+
+    pub fn define_local_variable(&mut self, ty: Type) -> Node {
+        let mut vec = Vec::new();
+        loop {
+            vec.push(self.new_local_variable(ty.clone()));
+            if let None = self.consume_str(",") {
+                break;
+            }
+        }
+        Node {
+            nt: NodeType::DefVar,
+            children: vec,
+            ..Node::default()
+        }
+    }
+
     pub fn consume_block(&mut self) -> Option<Node> {
-        if let Some(t) = self.consume_reserved("{") {
+        if let Some(t) = self.consume_str("{") {
             let mut children: Vec<Node> = Vec::new();
-            while let None = self.consume_reserved("}") {
+            while let None = self.consume_str("}") {
                 children.push(self.stmt());
             }
             Some(
@@ -306,7 +306,7 @@ impl<'a> AstBuilder<'a> {
     }
     fn assign(&mut self) -> Node {
         let mut node = self.equality();
-        if let Some(t) = self.consume_reserved("=") {
+        if let Some(t) = self.consume_str("=") {
             // left-associative => while, right-associative => recursive function
             node = Node::new_with_op(Some(t), NodeType::Asg, node, self.assign())
         }
@@ -315,9 +315,9 @@ impl<'a> AstBuilder<'a> {
     fn equality(&mut self) -> Node {
         let mut node = self.relational();
         loop {
-            if let Some(t) = self.consume_reserved("==") {
+            if let Some(t) = self.consume_str("==") {
                 node = Node::new_with_op(Some(t), NodeType::Eq, node, self.relational())
-            } else if let Some(t) = self.consume_reserved("!=") {
+            } else if let Some(t) = self.consume_str("!=") {
                 node = Node::new_with_op(Some(t), NodeType::Ne, node, self.relational())
             } else {
                 return node;
@@ -327,13 +327,13 @@ impl<'a> AstBuilder<'a> {
     fn relational(&mut self) -> Node {
         let mut node = self.add();
         loop {
-            if let Some(t) = self.consume_reserved("<") {
+            if let Some(t) = self.consume_str("<") {
                 node = Node::new_with_op(Some(t), NodeType::Lt, node, self.add())
-            } else if let Some(t) = self.consume_reserved("<=") {
+            } else if let Some(t) = self.consume_str("<=") {
                 node = Node::new_with_op(Some(t), NodeType::Le, node, self.add())
-            } else if let Some(t) = self.consume_reserved(">") {
+            } else if let Some(t) = self.consume_str(">") {
                 node = Node::new_with_op(Some(t), NodeType::Lt, self.add(), node)
-            } else if let Some(t) = self.consume_reserved(">=") {
+            } else if let Some(t) = self.consume_str(">=") {
                 node = Node::new_with_op(Some(t), NodeType::Le, self.add(), node)
             } else {
                 return node;
@@ -343,9 +343,9 @@ impl<'a> AstBuilder<'a> {
     fn add(&mut self) -> Node {
         let mut node = self.mul();
         loop {
-            if let Some(t) = self.consume_reserved("+") {
+            if let Some(t) = self.consume_str("+") {
                 node = Node::new_with_op(Some(t), NodeType::Add, node, self.mul())
-            } else if let Some(t) = self.consume_reserved("-") {
+            } else if let Some(t) = self.consume_str("-") {
                 node = Node::new_with_op(Some(t), NodeType::Sub, node, self.mul())
             } else {
                 return node;
@@ -355,11 +355,11 @@ impl<'a> AstBuilder<'a> {
     fn mul(&mut self) -> Node {
         let mut node = self.unary();
         loop {
-            if let Some(t) = self.consume_reserved("*") {
+            if let Some(t) = self.consume_str("*") {
                 node = Node::new_with_op(Some(t), NodeType::Mul, node, self.unary())
-            } else if let Some(t) = self.consume_reserved("/") {
+            } else if let Some(t) = self.consume_str("/") {
                 node = Node::new_with_op(Some(t), NodeType::Div, node, self.unary())
-            } else if let Some(t) = self.consume_reserved("%") {
+            } else if let Some(t) = self.consume_str("%") {
                 node = Node::new_with_op(Some(t), NodeType::Mod, node, self.unary())
             } else {
                 return node;
@@ -367,7 +367,7 @@ impl<'a> AstBuilder<'a> {
         }
     }
     fn unary(&mut self) -> Node {
-        if let Some(t) = self.consume_reserved("sizeof") {
+        if let Some(t) = self.consume_str("sizeof") {
             return Node {
                 token: Some(t),
                 value: Some(self.unary().resolve_type().unwrap().size_of()),
@@ -375,10 +375,10 @@ impl<'a> AstBuilder<'a> {
                 ..Node::default()
             };
         }
-        if let Some(_) = self.consume_reserved("+") {} else if let Some(t) = self.consume_reserved("-") {
+        if let Some(_) = self.consume_str("+") {} else if let Some(t) = self.consume_str("-") {
             return Node::new_with_op(Some(t), NodeType::Sub, Node::new_with_num(None, 0), self.prim());
         }
-        if let Some(t) = self.consume_reserved("&") {
+        if let Some(t) = self.consume_str("&") {
             return Node {
                 token: Some(t),
                 nt: NodeType::Addr,
@@ -386,7 +386,7 @@ impl<'a> AstBuilder<'a> {
                 ..Node::default()
             };
         }
-        if let Some(t) = self.consume_reserved("*") {
+        if let Some(t) = self.consume_str("*") {
             return Node {
                 token: Some(t),
                 nt: NodeType::Deref,
@@ -397,20 +397,20 @@ impl<'a> AstBuilder<'a> {
         self.prim()
     }
     fn prim(&mut self) -> Node {
-        let mut node = if let Some(_) = self.consume_reserved("(") {
+        let mut node = if let Some(_) = self.consume_str("(") {
             let node = self.expr();
             self.expect(")");
             node
         } else if let Some(t) = self.consume_ident() {
-            if let Some(_) = self.consume_reserved("(") {
+            if let Some(_) = self.consume_str("(") {
                 if !self.function_types.contains_key(&t.s_value) {
                     error_at(self.code, t.pos, "undefined function");
                 }
                 let (arg_types, ret_ty, is_enabled_arg_types_validation) = self.function_types.get(&t.s_value).unwrap().clone();
                 let mut args: Vec<Node> = Vec::new();
-                if let None = self.consume_reserved(")") {
+                if let None = self.consume_str(")") {
                     args.push(self.expr());
-                    while let None = self.consume_reserved(")") {
+                    while let None = self.consume_str(")") {
                         self.expect(",");
                         args.push(self.expr());
                     }
@@ -471,7 +471,7 @@ impl<'a> AstBuilder<'a> {
             let node = Node {
                 token: Some(t.clone()),
                 nt: NodeType::GVar,
-                dest: format!("L_.str.{}", self.string_literals.len()-1),
+                dest: format!("L_.str.{}", self.string_literals.len() - 1),
                 ..Node::default()
             };
             Node {
@@ -491,7 +491,7 @@ impl<'a> AstBuilder<'a> {
                 ..Node::default()
             }
         };
-        if let Some(b_token) = self.consume_reserved("[") {
+        if let Some(b_token) = self.consume_str("[") {
             let rhs = self.expr();
             self.expect("]");
             let addition = Node {

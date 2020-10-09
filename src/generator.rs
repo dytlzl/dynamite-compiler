@@ -128,6 +128,10 @@ impl<'a> AsmGenerator<'a> {
 
     fn gen_with_node(&mut self, node: &Node) -> std::io::Result<()> {
         match node.nt {
+            NodeType::DefVar => {
+                self.gen_with_vec(&node.children)?;
+                return Ok(());
+            }
             NodeType::Cf => {
                 writeln!(self.buf, "  mov rax, rsp")?;
                 writeln!(self.buf, "  add rax, 8")?;

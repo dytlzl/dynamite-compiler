@@ -38,5 +38,15 @@ int main() {
     assert(1, 124>=31*4);
     a = -3;
     assert(1836311903, fib(46));
+    int b, c = 4, *d, e[3];
+    e[2] = 5; b = 3; d = &e[2];
+    assert(60, b*c**d);
+    for (int i = 0;;) {
+        break;
+    }
+    char ch[3];
+    int f;
+    f = 4;
+    printf("%lu\n", &f);
     return 0;
 }
