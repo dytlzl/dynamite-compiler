@@ -14,6 +14,22 @@ assert() {
     exit 1
   fi
 }
+
+assert_stdout() {
+  expected="$1"
+  input="$2"
+  ./target/debug/dynamite_compiler "$input" > asm/main.s
+  cc -o ./bin/main ./asm/main.s
+  actual=`./bin/main`
+
+  if [ "$actual" = "$expected" ]; then
+    echo "( $input ) => ( $actual )"
+  else
+    echo "( $input ) => ( $actual ) expected, but got ( $actual )"
+    exit 1
+  fi
+}
+
 if [ ! -d ./asm ]; then
   mkdir ./asm
 fi
@@ -60,5 +76,8 @@ assert 4 'int b; int main() { b = 4; return b;} '
 assert 9 'int arr[100];  int c; int main() { c = 4; arr[10] = 5; arr[7] = 7; return c+arr[10];}'
 assert 3 'int main() { char x[3]; x[0] = -1; x[1] = 2; int y; y = 4; return x[0] + y; }'
 assert 3 'char x[3]; int main() {  x[0] = -1; x[1] = 2; int y; y = 4; return x[0] + y; }'
+assert_stdout "value = 777" 'int value; int main() { value = 777; printf("value = %d\n", value); return 0;}'
+assert_stdout "value = 755" 'int value; int main() { char* fmt = "value = %d\n"; value = 755; printf(fmt, value); return 0;}'
+assert_stdout "value = 222" 'char* fmt; int main() { fmt = "value = %d\n"; printf(fmt, 222); return 0;}'
 
 echo OK

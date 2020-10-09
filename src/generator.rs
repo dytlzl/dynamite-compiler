@@ -2,15 +2,17 @@ use std::io::Write;
 use crate::node::{Node, NodeType, Type};
 use crate::error::{error, error_at};
 use std::collections::VecDeque;
+use crate::ast::AstBuilder;
 
 pub struct AsmGenerator<'a> {
     code: &'a str,
     pub buf: Vec<u8>,
     node_stream: &'a Vec<Node>,
-    stack_size: usize,
     target_os: Os,
     branch_count: usize,
     loop_stack: VecDeque<usize>,
+    builder: &'a AstBuilder<'a>,
+    current_stack_size: usize,
 }
 
 pub enum Os {
@@ -21,15 +23,16 @@ pub enum Os {
 const ARGS_REG: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
 
 impl<'a> AsmGenerator<'a> {
-    pub fn new(code: &'a str, node_stream: &'a Vec<Node>, stack_size: usize, target_os: Os) -> Self {
+    pub fn new(builder: &'a AstBuilder<'a>, code: &'a str, node_stream: &'a Vec<Node>, target_os: Os) -> Self {
         Self {
             code,
             buf: Vec::new(),
             node_stream,
-            stack_size,
             target_os,
+            builder,
             branch_count: 0,
             loop_stack: VecDeque::new(),
+            current_stack_size: 0,
         }
     }
 
@@ -42,6 +45,16 @@ impl<'a> AsmGenerator<'a> {
                 NodeType::GVar => { self.gen_global_variable(node)?; }
                 _ => { unreachable!(); }
             }
+        }
+        self.gen_string_literals()?;
+        Ok(())
+    }
+
+    pub fn gen_string_literals(&mut self) -> std::io::Result<()> {
+        writeln!(self.buf, ".section __TEXT,__cstring,cstring_literals")?;
+        for (i, str) in self.builder.string_literals.iter().enumerate() {
+            writeln!(self.buf, "L_.str.{}:", i)?;
+            writeln!(self.buf, "  .asciz \"{}\"", str)?;
         }
         Ok(())
     }
@@ -81,6 +94,7 @@ impl<'a> AsmGenerator<'a> {
                 error_at(self.code, arg.token.as_ref().unwrap().pos, "ident expected");
             }
         }
+        self.current_stack_size = node.offset.unwrap();
         self.gen_with_node(node.body.as_ref().unwrap())?;
         self.epilogue()?;
         writeln!(self.buf)?;
@@ -290,8 +304,12 @@ impl<'a> AsmGenerator<'a> {
     fn gen_addr(&mut self, node: &Node) -> std::io::Result<()> {
         match node.nt {
             NodeType::GVar => {
-                let prefix = if let Os::MacOS = self.target_os { "_" } else { "" };
-                writeln!(self.buf, "  lea rax, [rip + {}{}]", prefix, node.global_name)?;
+                if node.dest != "" {
+                    writeln!(self.buf, "  lea rax, [rip + {}]", node.dest)?;
+                } else {
+                    let prefix = if let Os::MacOS = self.target_os { "_" } else { "" };
+                    writeln!(self.buf, "  lea rax, [rip + {}{}]", prefix, node.global_name)?;
+                }
                 self.push("rax")?;
             }
             NodeType::LVar => {
@@ -336,7 +354,7 @@ impl<'a> AsmGenerator<'a> {
 
     fn reset_stack(&mut self) -> std::io::Result<()> {
         writeln!(self.buf, "  mov rsp, rbp")?;
-        writeln!(self.buf, "  sub rsp, {}", self.stack_size)?;
+        writeln!(self.buf, "  sub rsp, {}", self.current_stack_size)?;
         Ok(())
     }
 

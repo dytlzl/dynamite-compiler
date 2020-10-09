@@ -138,8 +138,36 @@ impl Tokenizer {
                         self.push_ident_token(pos, temp);
                     }
                 }
+                '"' => {
+                    let pos = chars[i].0;
+                    let mut temp = String::new();
+                    i += 1;
+                    loop {
+                        if i >= chars.len() {
+                            error_at(code, i, "unexpected eof")
+                        }
+                        match chars[i].1 {
+                            '"' => {
+                                i += 1;
+                                break
+                            }
+                            _ => {
+                                temp.push(chars[i].1);
+                                i += 1;
+                            }
+                        }
+                    }
+                    self.tokens.push(
+                        Token {
+                            tt: TokenType::Str,
+                            pos,
+                            s_value: temp,
+                            ..Token::default()
+                        }
+                    )
+                }
                 _ => {
-                    error_at(code, i, "unexpected_character")
+                    error_at(code, i, "unexpected character")
                 }
             }
         }

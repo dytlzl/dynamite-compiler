@@ -9,13 +9,14 @@ pub struct AstBuilder<'a> {
     cur: usize,
     pub offset_size: usize,
     offset_map: HashMap<String, (Type, usize)>,
-    function_types: HashMap<String, (Vec<Type>, Type)>,
+    function_types: HashMap<String, (Vec<Type>, Type, bool)>,
     global_variables: HashMap<String, Type>,
+    pub string_literals: Vec<String>,
 }
 
 impl<'a> AstBuilder<'a> {
     pub fn new(code: &'a str, tokens: &'a Vec<Token>) -> Self {
-        Self {
+        let mut builder = Self {
             code,
             tokens,
             cur: 0,
@@ -23,7 +24,13 @@ impl<'a> AstBuilder<'a> {
             offset_map: HashMap::new(),
             function_types: HashMap::new(),
             global_variables: HashMap::new(),
-        }
+            string_literals: Vec::new(),
+        };
+        builder.function_types.insert(
+            String::from("printf"),
+            (vec![Type::Ptr(Box::new(Type::Char))], Type::Int, false)
+        );
+        builder
     }
     fn consume_reserved(&mut self, s_value: &str) -> Option<Token> {
         if let TokenType::Reserved = self.tokens[self.cur].tt {
@@ -61,7 +68,14 @@ impl<'a> AstBuilder<'a> {
         self.cur += 1;
         self.tokens[self.cur - 1].clone()
     }
-
+    fn consume(&mut self, tt: TokenType) -> Option<Token> {
+        if tt == self.tokens[self.cur].tt {
+            self.cur += 1;
+            Some(self.tokens[self.cur - 1].clone())
+        } else {
+            None
+        }
+    }
     fn at_eof(&self) -> bool {
         if let TokenType::Eof = self.tokens[self.cur].tt {
             true
@@ -136,7 +150,7 @@ impl<'a> AstBuilder<'a> {
                 let arg_types: Vec<Type> = args.iter().map(
                     |arg| { arg.cty.clone().unwrap() }
                 ).collect();
-                self.function_types.insert(t.s_value.clone(), (arg_types, ty));
+                self.function_types.insert(t.s_value.clone(), (arg_types, ty, true));
                 let s_value = t.s_value.clone();
                 if let Some(block) = self.consume_block() {
                     return Node {
@@ -163,7 +177,7 @@ impl<'a> AstBuilder<'a> {
                     cty: Some(ty),
                     global_name: t.s_value,
                     ..Node::default()
-                }
+                };
             }
         }
         error_at(self.code, self.tokens[self.cur].pos, "unexpected token");
@@ -379,7 +393,7 @@ impl<'a> AstBuilder<'a> {
         self.prim()
     }
     fn prim(&mut self) -> Node {
-        let mut node =  if let Some(_) = self.consume_reserved("(") {
+        let mut node = if let Some(_) = self.consume_reserved("(") {
             let node = self.expr();
             self.expect(")");
             node
@@ -388,7 +402,7 @@ impl<'a> AstBuilder<'a> {
                 if !self.function_types.contains_key(&t.s_value) {
                     error_at(self.code, t.pos, "undefined function");
                 }
-                let (arg_types, ret_ty) = self.function_types.get(&t.s_value).unwrap().clone();
+                let (arg_types, ret_ty, is_enabled_arg_types_validation) = self.function_types.get(&t.s_value).unwrap().clone();
                 let mut args: Vec<Node> = Vec::new();
                 if let None = self.consume_reserved(")") {
                     args.push(self.expr());
@@ -396,13 +410,15 @@ impl<'a> AstBuilder<'a> {
                         self.expect(",");
                         args.push(self.expr());
                     }
-                    if args.len() != arg_types.len() {
-                        error_at(self.code, t.pos, "invalid count of arguments");
-                    }
-                    for (n, arg_type) in args.iter().zip(arg_types) {
-                        if n.resolve_type() != Some(arg_type.clone()) {
-                            eprintln!("{:?}{:?}", n.resolve_type(), arg_type);
-                            error_at(self.code, n.token.as_ref().unwrap().pos, "invalid type")
+                    if is_enabled_arg_types_validation {
+                        if args.len() != arg_types.len() {
+                            error_at(self.code, t.pos, "invalid count of arguments");
+                        }
+                        for (n, arg_type) in args.iter().zip(arg_types) {
+                            if n.resolve_type() != Some(arg_type.clone()) {
+                                eprintln!("{:?}{:?}", n.resolve_type(), arg_type);
+                                error_at(self.code, n.token.as_ref().unwrap().pos, "invalid type")
+                            }
                         }
                     }
                     if args.len() >= 7 {
@@ -444,6 +460,21 @@ impl<'a> AstBuilder<'a> {
                     error_at(self.code, t.pos, "undefined variable");
                     unreachable!();
                 }
+            }
+        } else if let Some(t) = self.consume(TokenType::Str) {
+            self.string_literals.push(t.s_value.clone());
+            let node = Node {
+                token: Some(t.clone()),
+                nt: NodeType::GVar,
+                dest: format!("L_.str.{}", self.string_literals.len()-1),
+                ..Node::default()
+            };
+            Node {
+                token: Some(t.clone()),
+                nt: NodeType::Addr,
+                cty: Some(Type::Ptr(Box::new(Type::Char))),
+                lhs: Some(Box::new(node)),
+                ..Node::default()
             }
         } else {
             let t = self.expect_number();

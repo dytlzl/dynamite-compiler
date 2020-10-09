@@ -1,8 +1,9 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
     Reserved,
     Ident,
     Num,
+    Str,
     Eof,
 }
 
@@ -29,10 +30,13 @@ impl Token {
             TokenType::Reserved => {
                 eprintln!("rsv: {}", &self.s_value)
             }
-            TokenType::Eof => {}
             TokenType::Ident => {
                 eprintln!("idt: {}", &self.s_value)
             }
+            TokenType::Str => {
+                eprintln!("str: {}", &self.s_value)
+            }
+            TokenType::Eof => {}
         }
     }
 }

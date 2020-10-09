@@ -34,7 +34,7 @@ fn main() {
     #[cfg(target_os = "macos")]
         let target_os = Os::MacOS;
     let mut generator = AsmGenerator::new(
-        code, &node_stream, builder.offset_size+16, target_os);
+        &builder, code, &node_stream, target_os);
     generator.gen().unwrap();
     let asm = String::from_utf8(generator.buf).unwrap();
     print!("{}", &asm);

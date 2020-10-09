@@ -49,6 +49,7 @@ pub struct Node {
     pub body: Option<Box<Node>>,
     pub value: Option<usize>,
     pub global_name: String,
+    pub dest: String,
     pub args: Vec<Node>,
     pub cty: Option<Type>,
     pub offset: Option<usize>,
@@ -125,7 +126,7 @@ impl Node {
                 if let Some(ty) = self.lhs.as_ref().unwrap().resolve_type() {
                     Some(Type::Ptr(Box::new(ty)))
                 } else {
-                    unreachable!();
+                    self.cty.clone()
                 }
             }
             NodeType::Deref => {
