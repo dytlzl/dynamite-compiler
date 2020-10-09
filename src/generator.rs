@@ -51,16 +51,27 @@ impl<'a> AsmGenerator<'a> {
     }
 
     pub fn gen_string_literals(&mut self) -> std::io::Result<()> {
-        writeln!(self.buf, ".section __TEXT,__cstring,cstring_literals")?;
-        for (i, str) in self.builder.string_literals.iter().enumerate() {
-            writeln!(self.buf, "L_.str.{}:", i)?;
-            writeln!(self.buf, "  .asciz \"{}\"", str)?;
+        
+        if self.builder.string_literals.len() != 0 {
+            if let Os::MacOS = self.target_os {
+                writeln!(self.buf, ".section __TEXT,__cstring,cstring_literals")?;
+            } else {
+                writeln!(self.buf, ".section .data")?;
+            }
+            for (i, str) in self.builder.string_literals.iter().enumerate() {
+                writeln!(self.buf, "L_.str.{}:", i)?;
+                writeln!(self.buf, "  .asciz \"{}\"", str)?;
+            }
         }
         Ok(())
     }
 
     pub fn gen_global_variable(&mut self, node: &Node) -> std::io::Result<()> {
-        writeln!(self.buf, ".section __DATA,__data",)?;
+        if let Os::MacOS = self.target_os {
+            writeln!(self.buf, ".section __DATA,__data",)?;
+        } else {
+            writeln!(self.buf, ".section .data",)?;
+        }
         let prefix = if let Os::MacOS = self.target_os { "_" } else { "" };
         writeln!(self.buf, "{}{}:", prefix, node.global_name)?;
         match node.cty.as_ref().unwrap() {
@@ -76,7 +87,9 @@ impl<'a> AsmGenerator<'a> {
     }
 
     pub fn gen_func(&mut self, node: &Node) -> std::io::Result<()> {
-        writeln!(self.buf, ".section __TEXT,__text,regular,pure_instructions",)?;
+        if let Os::MacOS = self.target_os {
+            writeln!(self.buf, ".section __TEXT,__text,regular,pure_instructions",)?;
+        }
         let prefix = if let Os::MacOS = self.target_os { "_" } else { "" };
         writeln!(self.buf, ".globl {}{}", prefix, node.global_name)?;
         writeln!(self.buf, "{}{}:", prefix, node.global_name)?;

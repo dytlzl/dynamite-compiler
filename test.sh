@@ -1,9 +1,12 @@
 #!/bin/bash
+
+options=$1
+
 assert() {
   expected="$1"
   input="$2"
   ./target/debug/dynamite_compiler "$input" > asm/main.s
-  cc -o ./bin/main ./asm/main.s
+  cc $options -o ./bin/main ./asm/main.s
   ./bin/main
   actual="$?"
 
@@ -19,7 +22,7 @@ assert_stdout() {
   expected="$1"
   input="$2"
   ./target/debug/dynamite_compiler "$input" > asm/main.s
-  cc -o ./bin/main ./asm/main.s
+  cc $options -o ./bin/main ./asm/main.s
   actual=`./bin/main`
 
   if [ "$actual" = "$expected" ]; then
