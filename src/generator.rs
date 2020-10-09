@@ -51,7 +51,6 @@ impl<'a> AsmGenerator<'a> {
     }
 
     pub fn gen_string_literals(&mut self) -> std::io::Result<()> {
-        
         if self.builder.string_literals.len() != 0 {
             if let Os::MacOS = self.target_os {
                 writeln!(self.buf, ".section __TEXT,__cstring,cstring_literals")?;
@@ -74,10 +73,16 @@ impl<'a> AsmGenerator<'a> {
         }
         let prefix = if let Os::MacOS = self.target_os { "_" } else { "" };
         writeln!(self.buf, "{}{}:", prefix, node.global_name)?;
-        match node.cty.as_ref().unwrap() {
+        match node.resolve_type().as_ref().unwrap() {
             Type::Arr(_, _) => {
-                writeln!(self.buf, "  .zero {}", node.cty.as_ref().unwrap().size_of())?;
+                writeln!(self.buf, "  .zero {}", node.resolve_type().as_ref().unwrap().size_of())?;
             },
+            Type::Int => {
+                writeln!(self.buf, "  .int 0")?;
+            }
+            Type::Char => {
+                writeln!(self.buf, "  .byte 0")?;
+            }
             _ => {
                 writeln!(self.buf, "  .long 0")?;
             },
@@ -224,11 +229,11 @@ impl<'a> AsmGenerator<'a> {
             }
             NodeType::LVar | NodeType::GVar => {
                 self.gen_addr(node)?;
-                if let Some(Type::Arr(_, _)) = node.cty {
+                if let Some(Type::Arr(_, _)) = node.resolve_type() {
                     return Ok(());
                 }
                 self.pop_rax()?;
-                writeln!(self.buf, "  mov rax, [rax]")?;
+                self.deref_rax(node)?;
                 self.push("rax")?;
                 return Ok(());
             }
@@ -239,7 +244,7 @@ impl<'a> AsmGenerator<'a> {
             NodeType::Deref => {
                 self.gen_with_node(node.lhs.as_ref().unwrap())?;
                 self.pop_rax()?;
-                writeln!(self.buf, "  mov rax, [rax]")?;
+                self.deref_rax(node)?;
                 self.push("rax")?;
                 return Ok(());
             }
@@ -248,7 +253,17 @@ impl<'a> AsmGenerator<'a> {
                 self.gen_with_node(node.rhs.as_ref().unwrap())?;
                 self.pop_rdi()?;
                 self.pop_rax()?;
-                writeln!(self.buf, "  mov [rax], rdi")?;
+                match node.lhs.as_ref().unwrap().resolve_type() {
+                    Some(Type::Int) => {
+                        writeln!(self.buf, "  mov dword ptr[rax], edi")?;
+                    },
+                    Some(Type::Char) => {
+                        writeln!(self.buf, "  mov byte ptr[rax], dil")?;
+                    },
+                    _ => {
+                        writeln!(self.buf, "  mov qword ptr[rax], rdi")?;
+                    },
+                }
                 self.push("rdi")?;
                 return Ok(());
             }
@@ -340,6 +355,21 @@ impl<'a> AsmGenerator<'a> {
         Ok(())
     }
 
+    fn deref_rax(&mut self, node: &Node) -> std::io::Result<()> {
+        match node.resolve_type() {
+            Some(Type::Int) => {
+                writeln!(self.buf, "  movsxd rax, dword ptr[rax]")?;
+            },
+            Some(Type::Char) => {
+                writeln!(self.buf, "  movsx rax, byte ptr[rax]")?;
+            },
+            _ => {
+                writeln!(self.buf, "  mov rax, qword ptr[rax]")?;
+            },
+        }
+        Ok(())
+    }
+
     fn new_branch_num(&mut self) -> usize {
         self.branch_count += 1;
         self.branch_count
@@ -368,22 +398,6 @@ impl<'a> AsmGenerator<'a> {
     fn reset_stack(&mut self) -> std::io::Result<()> {
         writeln!(self.buf, "  mov rsp, rbp")?;
         writeln!(self.buf, "  sub rsp, {}", self.current_stack_size)?;
-        Ok(())
-    }
-
-    fn _printf(&mut self, offset: usize) -> std::io::Result<()> {
-        self.reset_stack()?;
-        writeln!(self.buf, r#"  lea rdi, [rip + L_.str]
-  mov esi, dword ptr [rbp - {}]
-  mov al, 0
-  call _printf"#, offset)?;
-        Ok(())
-    }
-
-    fn _set_string(&mut self) -> std::io::Result<()> {
-        writeln!(self.buf, r#"  .section __TEXT,__cstring,cstring_literals
-L_.str:                                 ## @.str
-  .asciz "value = %d\n""#).unwrap();
         Ok(())
     }
 }

@@ -1,10 +1,22 @@
+.PHONY: test test-linux compile assemble run run-asm
 test:
 	cargo build
-	./test.sh
+	./test/test.sh
 
 test-linux:
 	cargo build
-	./test.sh -no-pie
+	./test/test.sh -no-pie
 
-run:
-	cargo run ./temp/main.c > ./temp/main.s && cc -o ./temp/main ./temp/main.s && ./temp/main
+SRC := ./temp/main.c
+
+compile:
+	cargo run $(SRC) > ./temp/main.s
+
+assemble:
+	cc -o ./temp/main ./temp/main.s
+
+run: compile assemble
+	./temp/main
+
+run-asm: assemble
+	./temp/main

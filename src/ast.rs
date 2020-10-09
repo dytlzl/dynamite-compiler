@@ -30,6 +30,10 @@ impl<'a> AstBuilder<'a> {
             String::from("printf"),
             (vec![Type::Ptr(Box::new(Type::Char))], Type::Int, false)
         );
+        builder.function_types.insert(
+            String::from("exit"),
+            (vec![Type::Int], Type::Int, false)
+        );
         builder
     }
     fn consume_reserved(&mut self, s_value: &str) -> Option<Token> {
@@ -56,14 +60,14 @@ impl<'a> AstBuilder<'a> {
                 return self.tokens[self.cur - 1].clone();
             }
         }
-        error_at(self.code, self.tokens[self.cur].pos, "unexpected token");
+        error_at(self.code, self.tokens[self.cur].pos, &format!("`{}` expected", s_value));
         unreachable!()
     }
     fn expect_number(&mut self) -> Token {
         if let TokenType::Num = self.tokens[self.cur].tt {} else {
             error_at(
                 self.code, self.tokens[self.cur].pos,
-                &format!("expected number, but got {}", &self.tokens[self.cur].s_value))
+                &format!("number expected, but got {}", &self.tokens[self.cur].s_value))
         }
         self.cur += 1;
         self.tokens[self.cur - 1].clone()
@@ -148,7 +152,7 @@ impl<'a> AstBuilder<'a> {
                     }
                 }
                 let arg_types: Vec<Type> = args.iter().map(
-                    |arg| { arg.cty.clone().unwrap() }
+                    |arg| { arg.resolve_type().clone().unwrap() }
                 ).collect();
                 self.function_types.insert(t.s_value.clone(), (arg_types, ty, true));
                 let s_value = t.s_value.clone();
@@ -262,7 +266,7 @@ impl<'a> AstBuilder<'a> {
                     node
                 }
             } else {
-                error_at(self.code, self.tokens[self.cur].pos, "expected ident");
+                error_at(self.code, self.tokens[self.cur].pos, "ident expected");
                 unreachable!();
             }
         } else if let Some(t) = self.consume_reserved("break") {
@@ -414,12 +418,13 @@ impl<'a> AstBuilder<'a> {
                         if args.len() != arg_types.len() {
                             error_at(self.code, t.pos, "invalid count of arguments");
                         }
+                        /*
                         for (n, arg_type) in args.iter().zip(arg_types) {
                             if n.resolve_type() != Some(arg_type.clone()) {
-                                eprintln!("{:?}{:?}", n.resolve_type(), arg_type);
                                 error_at(self.code, n.token.as_ref().unwrap().pos, "invalid type")
                             }
                         }
+                         */
                     }
                     if args.len() >= 7 {
                         error_at(self.code, t.pos, "count of args must be less than 7")

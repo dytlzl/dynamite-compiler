@@ -5,9 +5,15 @@ options=$1
 assert() {
   expected="$1"
   input="$2"
-  ./target/debug/dynamite_compiler "$input" > asm/main.s
-  cc $options -o ./bin/main ./asm/main.s
-  ./bin/main
+  ./target/debug/dynamite_compiler "$input" > ./temp/main.s
+  if [ $? != 0 ]; then
+    exit 1
+  fi
+  cc $options -o ./temp/main ./temp/main.s
+  if [ $? != 0 ]; then
+    exit 1
+  fi
+  ./temp/main
   actual="$?"
 
   if [ "$actual" = "$expected" ]; then
@@ -21,9 +27,15 @@ assert() {
 assert_stdout() {
   expected="$1"
   input="$2"
-  ./target/debug/dynamite_compiler "$input" > asm/main.s
-  cc $options -o ./bin/main ./asm/main.s
-  actual=`./bin/main`
+  ./target/debug/dynamite_compiler "$input" > ./temp/main.s
+  if [ $? != 0 ]; then
+    exit 1
+  fi
+  cc $options -o ./temp/main ./temp/main.s
+  if [ $? != 0 ]; then
+    exit 1
+  fi
+  actual=`./temp/main`
 
   if [ "$actual" = "$expected" ]; then
     echo "( $input ) => ( $actual )"
@@ -33,23 +45,13 @@ assert_stdout() {
   fi
 }
 
-if [ ! -d ./asm ]; then
-  mkdir ./asm
-fi
-if [ ! -d ./bin ]; then
-  mkdir ./bin
+if [ ! -d ./temp ]; then
+  mkdir ./temp
 fi
 << CMT
 CMT
 
-assert 42 'int main() { return 42; }'
-assert 28 'int main() { return 3 * (29 % (13-2) + 3) - 2; }'
-assert 10 'int main() { return -1* 4+2*+7; }';
-assert 1 'int main() { return 5-3==2; }'
-assert 1 'int main() { return 123<31*4; }'
-assert 1 'int main() { return 124<=31*4; }'
-assert 0 'int main() { return 124>31*4; }'
-assert 1 'int main() { return 124>=31*4; }'
+assert 0 './test/test.c'
 assert 12 'int main() { int a=3; int b=4; return a*b; }'
 assert 1 'int main() { int a=3; int b=4; return a*a*b==36; }'
 assert 31 'int main() { int ice=3; int cream=7; return ice*cream+ice+cream; }'
