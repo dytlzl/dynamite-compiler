@@ -7,3 +7,4 @@ pub mod error;
 pub mod ctype;
 pub mod func;
 pub mod instruction;
+pub mod global;

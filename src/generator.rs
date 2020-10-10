@@ -8,6 +8,7 @@ use crate::func::Func;
 use crate::instruction::{Instruction, InstOperator, InstOperand};
 use crate::instruction::{InstOperator::*, Register::*};
 use std::fmt::Display;
+use crate::global::{GlobalVariable, GlobalVariableData};
 
 pub struct AsmGenerator<'a> {
     code: &'a str,
@@ -56,8 +57,8 @@ impl<'a> AsmGenerator<'a> {
                 self.writeln(".section .data");
             }
         }
-        for (s, t) in &self.builder.global_variables {
-            self.gen_global_variable(s, t.clone());
+        for (s, gv) in &self.builder.global_variables {
+            self.gen_global_variable(s, gv);
         }
         self.gen_string_literals();
     }
@@ -76,20 +77,43 @@ impl<'a> AsmGenerator<'a> {
         }
     }
 
-    pub fn gen_global_variable(&mut self, name: &str, ty: Type) {
+    pub fn gen_global_variable(&mut self, name: &str, gv: &GlobalVariable) {
         self.writeln(format!("{}:", self.with_prefix(name)));
+        self.gen_initializer_element(&gv.ty, gv.data.as_ref())
+    }
+
+    pub fn gen_initializer_element(&mut self, ty: &Type, data: Option<&GlobalVariableData>) {
         match ty {
-            Type::Arr(_, _) => {
-                self.writeln(format!("  .zero {}", ty.size_of()));
+            Type::Arr(children_ty, size) => {
+                let mut rest_count = *size;
+                if let Some(GlobalVariableData::Arr(v)) = data {
+                    for (i, d) in v.iter().enumerate() {
+                        if i >= *size {
+                            break;
+                        }
+                        self.gen_initializer_element(children_ty.as_ref(), Some(d));
+                    }
+                    rest_count -= v.len();
+                }
+                self.writeln(format!("  .zero {}", children_ty.size_of() * rest_count));
             }
             Type::Char => {
-                self.writeln("  .byte 0");
+                self.writeln(format!(
+                    "  .byte {}",
+                    if let Some(GlobalVariableData::Elem(s)) = data { s } else { "0" }
+                ));
             }
             Type::Int => {
-                self.writeln("  .4byte 0");
+                self.writeln(format!(
+                    "  .4byte {}",
+                    if let Some(GlobalVariableData::Elem(s)) = data { s } else { "0" }
+                ));
             }
             _ => {
-                self.writeln("  .8byte 0");
+                self.writeln(format!(
+                    "  .8byte {}",
+                    if let Some(GlobalVariableData::Elem(s)) = data { s } else { "0" }
+                ));
             }
         }
     }
@@ -246,6 +270,9 @@ impl<'a> AsmGenerator<'a> {
             }
             NodeType::Deref => {
                 self.gen_with_node(node.lhs.as_ref().unwrap());
+                if let Some(Type::Arr(..)) = node.lhs.as_ref().unwrap().dest_type() {
+                    return;
+                }
                 self.inst1(POP, RAX);
                 self.deref_rax(node);
                 self.inst1(PUSH, RAX);
@@ -280,8 +307,6 @@ impl<'a> AsmGenerator<'a> {
             NodeType::Add => {
                 if let Some(t) = node.lhs.as_ref().unwrap().dest_type() {
                     self.inst2(IMUL, RDI, t.size_of());
-                } else if let Some(t) = node.rhs.as_ref().unwrap().dest_type() {
-                    self.inst2(IMUL, RAX, t.size_of());
                 }
                 self.inst2(ADD, RAX, RDI);
             }

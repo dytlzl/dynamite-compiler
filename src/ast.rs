@@ -4,6 +4,8 @@ use crate::error::{error_at};
 use std::collections::HashMap;
 use crate::ctype::Type;
 use crate::func::Func;
+use crate::global::{GlobalVariable, GlobalVariableData};
+use std::mem::swap;
 
 pub struct AstBuilder<'a> {
     code: &'a str,
@@ -12,7 +14,7 @@ pub struct AstBuilder<'a> {
     pub offset_size: usize,
     offset_map: HashMap<String, (Type, usize)>,
     pub global_functions: HashMap<String, Func>,
-    pub global_variables: HashMap<String, Type>,
+    pub global_variables: HashMap<String, GlobalVariable>,
     pub string_literals: Vec<String>,
 }
 
@@ -125,7 +127,7 @@ impl<'a> AstBuilder<'a> {
             ty = Type::Ptr(Box::new(ty));
         }
         if let Some(t) = self.consume_ident() {
-            if let Some(_) = self.consume_str("[") {
+            while let Some(_) = self.consume_str("[") {
                 let n = self.expect_number();
                 ty = Type::Arr(Box::new(ty), n.i_value);
                 self.expect("]");
@@ -142,7 +144,6 @@ impl<'a> AstBuilder<'a> {
         let segment_size =
             if let Some(dest) = ty.dest_type() { dest.size_of() } else { ty.size_of() };
         self.offset_size += segment_size - self.offset_size % segment_size;
-
         self.offset_map.insert(t.s_value.clone(), (ty.clone(), self.offset_size));
         let mut node = Node {
             token: Some(t),
@@ -156,7 +157,7 @@ impl<'a> AstBuilder<'a> {
                 Some(t),
                 NodeType::Asg,
                 node,
-                self.assign());
+                self.expr());
         }
         node
     }
@@ -223,12 +224,82 @@ impl<'a> AstBuilder<'a> {
             self.cur = cur_to_back; // back the cursor
             loop {
                 let (t, ty) = self.expect_ident_with_type(ty.clone());
-                self.global_variables.insert(t.s_value.clone(), ty.clone());
+                let data = if let Some(_) = self.consume_str("=") {
+                    Some(self.global_data())
+                } else {
+                    None
+                };
+                self.global_variables.insert(
+                    t.s_value.clone(),
+                    GlobalVariable { ty: ty.clone(), data });
                 if let None = self.consume_str(",") {
                     break;
                 }
             }
             self.expect(";");
+        }
+    }
+    fn global_data(&mut self) -> GlobalVariableData {
+        if let Some(_) = self.consume_str("{") {
+            let mut vec = Vec::new();
+            loop {
+                if let Some(_) = self.consume_str(",") {
+                } else if let Some(_) = self.consume_str("}") {
+                    break;
+                }
+                vec.push(self.global_data());
+            }
+            GlobalVariableData::Arr(vec)
+        } else if let Some(t) = self.consume(TokenType::Str) {
+            GlobalVariableData::Elem(self.new_string_literal(&t.s_value))
+        } else {
+            let equality = self.equality();
+            GlobalVariableData::Elem(format!("{}", self.eval(&equality)))
+        }
+    }
+    fn eval(&mut self, node: &Node) -> i64 {
+        match node.nt {
+            NodeType::Num => node.value.unwrap() as i64,
+            NodeType::Eq => {
+                (
+                    self.eval(node.lhs.as_ref().unwrap()) == self.eval(node.rhs.as_ref().unwrap())
+                ) as i64
+            }
+            NodeType::Ne => {
+                (
+                    self.eval(node.lhs.as_ref().unwrap()) != self.eval(node.rhs.as_ref().unwrap())
+                ) as i64
+            }
+            NodeType::Le => {
+                (
+                    self.eval(node.lhs.as_ref().unwrap()) <= self.eval(node.rhs.as_ref().unwrap())
+                ) as i64
+            }
+            NodeType::Lt => {
+                (
+                    self.eval(node.lhs.as_ref().unwrap()) < self.eval(node.rhs.as_ref().unwrap())
+                ) as i64
+            }
+            NodeType::Add => {
+                self.eval(node.lhs.as_ref().unwrap()) + self.eval(node.rhs.as_ref().unwrap())
+            }
+            NodeType::Sub => {
+                self.eval(node.lhs.as_ref().unwrap()) - self.eval(node.rhs.as_ref().unwrap())
+            }
+            NodeType::Mul => {
+                self.eval(node.lhs.as_ref().unwrap()) * self.eval(node.rhs.as_ref().unwrap())
+            }
+            NodeType::Div => {
+                self.eval(node.lhs.as_ref().unwrap()) / self.eval(node.rhs.as_ref().unwrap())
+            }
+            NodeType::Mod => {
+                self.eval(node.lhs.as_ref().unwrap()) % self.eval(node.rhs.as_ref().unwrap())
+            }
+            _ => {
+                error_at(self.code, node.token.as_ref().unwrap().pos,
+                         "initializer element is not a compile-time constant");
+                unreachable!()
+            }
         }
     }
     fn stmt(&mut self) -> Node {
@@ -468,7 +539,7 @@ impl<'a> AstBuilder<'a> {
                         ..Node::default()
                     }
                 } else if self.global_variables.contains_key(&t.s_value) {
-                    let ty = self.global_variables.get(&t.s_value).unwrap();
+                    let ty = self.global_variables.get(&t.s_value).unwrap().ty.clone();
                     Node {
                         token: Some(t.clone()),
                         nt: NodeType::GVar,
@@ -482,11 +553,11 @@ impl<'a> AstBuilder<'a> {
                 }
             }
         } else if let Some(t) = self.consume(TokenType::Str) {
-            self.string_literals.push(t.s_value.clone());
+            // String literal
             let node = Node {
                 token: Some(t.clone()),
                 nt: NodeType::GVar,
-                dest: format!("L_.str.{}", self.string_literals.len() - 1),
+                dest: self.new_string_literal(&t.s_value),
                 ..Node::default()
             };
             Node {
@@ -506,24 +577,38 @@ impl<'a> AstBuilder<'a> {
                 ..Node::default()
             }
         };
-        if let Some(b_token) = self.consume_str("[") {
-            let rhs = self.expr();
-            self.expect("]");
-            let addition = Node {
-                token: Some(b_token.clone()),
-                nt: NodeType::Add,
-                lhs: Some(Box::new(node)),
-                rhs: Some(Box::new(rhs)),
-                ..Node::default()
-            };
-            node = Node {
-                token: Some(b_token.clone()),
-                nt: NodeType::Deref,
-                lhs: Some(Box::new(addition)),
-                ..Node::default()
+        if let Some(_) = self.consume_str("[") {
+            // Subscript array
+            self.cur -= 1;
+            while let Some(b_token) = self.consume_str("[") {
+                let mut rhs = self.expr();
+                self.expect("]");
+                if let Some(Type::Arr(..)) = node.resolve_type() {} else {
+                    if let Some(Type::Arr(..)) = rhs.resolve_type() {
+                        swap(&mut node, &mut rhs);
+                    }
+                }
+                node = Node {
+                    token: Some(b_token.clone()),
+                    nt: NodeType::Add,
+                    lhs: Some(Box::new(node)),
+                    rhs: Some(Box::new(rhs)),
+                    ..Node::default()
+                };
+                node = Node {
+                    token: Some(b_token.clone()),
+                    nt: NodeType::Deref,
+                    lhs: Some(Box::new(node)),
+                    ..Node::default()
+                }
             }
         }
         node
+    }
+
+    fn new_string_literal(&mut self, s: &str) -> String {
+        self.string_literals.push(s.to_string());
+        format!("L_.str.{}", self.string_literals.len() - 1)
     }
 }
 

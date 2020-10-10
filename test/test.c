@@ -1,5 +1,4 @@
-int n;
-
+int n = 0;
 int assert(int expected, int actual) {
     n = n+1;
     printf("%d: ", n);
@@ -21,8 +20,8 @@ char a, aa;
 int add6(int a, int b, int c, int d, int e, int f) {
     return a + b*2 + c*3 + d*4 + e*5 + f*6;
 }
-int Add(int a, int b) { return a*2+b; }
 
+int Add(int a, int b) { return a*2+b; }
 
 int fib(int i) {
     if (i == 0) return 0;
@@ -52,19 +51,20 @@ int test16() { return sizeof(sizeof(1));}
 int test17() { return sizeof(8);}
 int test18() { int *y; return sizeof(y);}
 int test19() { int *y; return sizeof *y;}
-int test20() {int a[3]; return sizeof a;}
+int test20() {int a[3][12]; return sizeof a;}
 int test21() {int a[2];*a = 1;*(a + 1) = 2;int *p;p = a;return *p + *(p + 1);}
 int test22() {int a[3]; a[0] = 8; a[3] = 9; return a[0];}
-int test23() {int a[4]; a[0] = 8; a[3] = 9; return 3[a];}
+int test23() {int a[4]; a[0] = 8; a[3] = 91; return 3[a];}
 int arr[100];  int c;
 int test24() { c = 4; arr[10] = 5; arr[7] = 7; return c+arr[10];}
-int test25() { char x[3]; x[0] = -1; x[1] = 2; int y; y = 4; return x[0] + y; }
+int test25() { char x[3]; x[0] = -100; x[1] = 2; int y; y = 4; return x[0] + y; }
 char x[3];
-int test26() {  x[0] = -1; x[1] = 2; int y; y = 4; return x[0] + y; }
-
-
+int test26() { x[0] = -1; x[1] = 2; int y; y = 4; return x[0] + y; }
+int arr2[100][100] = {{7, 8}, {11}};
+int test27() { return arr2[0][0]*arr2[0][1]*arr2[1][0]; }
+int eval_check = 15*44+(51-24)%19+(9<3)*11+17*(3>=4)-29*(123 != 1);
+int test28() { return eval_check; }
 int main() {
-    n = 0;
     assert(0, 0);
     assert(42, 42);
     assert(-7, -7);
@@ -95,17 +95,19 @@ int main() {
     assert(4, test17());
     assert(8, test18());
     assert(4, test19());
-    assert(12, test20());
+    assert(144, test20());
     assert(3, test21());
     assert(8, test22());
-    assert(9, test23());
+    assert(91, test23());
     assert(9, test24());
-    assert(3, test25());
+    assert(-96, test25());
     assert(3, test26());
     a = -3;
     assert(1836311903, fib(46));
     int b, c = 4, *d, e[3];
     e[2] = 5; b = 3; d = &e[2];
     assert(60, b*c**d);
+    assert(616, test27());
+    assert(639, test28());
     return 0;
 }
