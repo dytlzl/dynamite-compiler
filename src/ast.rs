@@ -37,6 +37,22 @@ impl<'a> AstBuilder<'a> {
             },
         );
         builder.global_functions.insert(
+            String::from("puts"),
+            Func {
+                arg_types: vec![Type::Ptr(Box::new(Type::Char))],
+                return_type: Type::Int,
+                ..Func::default()
+            },
+        );
+        builder.global_functions.insert(
+            String::from("putchar"),
+            Func {
+                arg_types: vec![Type::Char],
+                return_type: Type::Int,
+                ..Func::default()
+            },
+        );
+        builder.global_functions.insert(
             String::from("exit"),
             Func {
                 body: None,

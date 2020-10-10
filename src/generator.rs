@@ -82,14 +82,14 @@ impl<'a> AsmGenerator<'a> {
             Type::Arr(_, _) => {
                 self.writeln(format!("  .zero {}", ty.size_of()));
             }
-            Type::Int => {
-                self.writeln("  .int 0");
-            }
             Type::Char => {
                 self.writeln("  .byte 0");
             }
+            Type::Int => {
+                self.writeln("  .4byte 0");
+            }
             _ => {
-                self.writeln("  .long 0");
+                self.writeln("  .8byte 0");
             }
         }
     }
