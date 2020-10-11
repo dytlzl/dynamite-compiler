@@ -1,7 +1,7 @@
 use crate::token::Token;
 use crate::ctype::Type;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum NodeType {
     Assign,
     LocalVar,
@@ -35,7 +35,7 @@ impl Default for NodeType {
 }
 
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Node {
     pub nt: NodeType,
     pub token: Option<Token>,

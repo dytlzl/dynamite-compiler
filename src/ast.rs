@@ -360,14 +360,9 @@ impl<'a> ASTBuilder<'a> {
         let mut vec = Vec::new();
         loop {
             let node = self.new_local_variable(ty.clone());
-            if let Some(t) = self.consume_str("=") {
-                let initializer = Node::new_with_op(
-                    Some(t),
-                    NodeType::Assign,
-                    node,
-                    self.expr());
+            if let Some(token) = self.consume_str("=") {
                 // if initializer element exists, push into AST
-                vec.push(initializer);
+                vec.push(self.local_variable_initialization(&node, &token));
             }
             if let None = self.consume_str(",") {
                 break;
@@ -377,6 +372,49 @@ impl<'a> ASTBuilder<'a> {
             nt: NodeType::DefVar,
             children: vec,
             ..Node::default()
+        }
+    }
+
+    fn local_variable_initialization(&mut self, node: &Node, assign_token: &Token) -> Node {
+        if let Some(b_token) = self.consume_str("{") {
+            let mut vec = Vec::new();
+            if let None = self.consume_str("}") {
+                let mut index = 0;
+                loop {
+                    let rhs = Node::new_with_num(None, index);
+                    let mut node = Node {
+                        token: Some(b_token.clone()),
+                        nt: NodeType::Add,
+                        lhs: Some(Box::new(node.clone())),
+                        rhs: Some(Box::new(rhs)),
+                        ..Node::default()
+                    };
+                    node = Node {
+                        token: Some(b_token.clone()),
+                        nt: NodeType::Deref,
+                        lhs: Some(Box::new(node)),
+                        ..Node::default()
+                    };
+                    vec.push(self.local_variable_initialization(&node, &assign_token));
+                    if let None = self.consume_str(",") { break; }
+                    index += 1;
+                }
+                self.expect("}");
+            }
+            Node {
+                token: Some(assign_token.clone()),
+                nt: NodeType::DefVar,
+                children: vec,
+                ..Node::default()
+            }
+        } else {
+            Node {
+                token: Some(assign_token.clone()),
+                nt: NodeType::Assign,
+                lhs: Some(Box::new(node.clone())),
+                rhs: Some(Box::new(self.expr())),
+                ..Node::default()
+            }
         }
     }
 

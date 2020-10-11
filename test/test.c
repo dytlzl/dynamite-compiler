@@ -64,6 +64,14 @@ int arr2[100][100] = {{7, 8}, {11}};
 int test27() { return arr2[0][0]*arr2[0][1]*arr2[1][0]; }
 int eval_check = 15*44+(51-24)%19+(9<3)*11+17*(3>=4)-29*(123 != 1);
 int test28() { return eval_check; }
+int test29() {
+    int arr[3][3] = {{1, 2, 3}, {}, {17, 8}};
+    return arr[0][0]*arr[0][1]*arr[0][2]*(arr[2][0]+arr[2][1]);
+}
+int test30() {
+    int b = 11, arr[2][2][2] = {{{}, {0, 3}}, {{0, 7}}};
+    return arr[0][1][1]*arr[1][0][1]*b;
+}
 int main() {
     assert(0, 0);
     assert(42, 42);
@@ -109,5 +117,7 @@ int main() {
     assert(60, b*c**d);
     assert(616, test27());
     assert(639, test28());
+    assert(150, test29());
+    assert(231, test30());
     return 0;
 }
