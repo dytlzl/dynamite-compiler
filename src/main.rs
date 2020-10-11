@@ -38,6 +38,9 @@ fn main() {
     let mut generator = AsmGenerator::new(
         &builder, &code, target_os);
     generator.gen();
-    let asm = String::from_utf8(generator.buf).unwrap();
-    print!("{}", &asm);
+    if let Os::MacOS = target_os {
+        generator.assemblies.iter().for_each(|ass| println!("{}", ass.to_string()) );
+    } else {
+        generator.assemblies.iter().for_each(|ass| println!("{}", ass.to_string4linux()) );
+    }
 }

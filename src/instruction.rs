@@ -51,7 +51,7 @@ impl InstOperator {
             CMP => "cmp"
         }
     }
-    pub fn to_string_for_linux(&self) -> &str {
+    pub fn to_string4linux(&self) -> &str {
         match self {
             MOVZX => "movzb",
             _ => self.to_string()
@@ -106,16 +106,41 @@ pub enum InstOperand {
     Reg(Register),
     Num(usize),
     Label(String),
-    Str(&'static str)
+    Str(&'static str),
+    Ptr(Register, usize),
+    PtrAdd(Register, String),
+    ElseFlag(usize),
+    BeginFlag(usize),
+    EndFlag(usize),
 }
 
 impl InstOperand {
-    pub fn to_string(&self) -> String {
+    fn to_string(&self) -> String {
         match self {
-            InstOperand::Str(s) => String::from(s.clone()),
+            InstOperand::Reg(r) => format!("{}", r),
             InstOperand::Num(i) => format!("{}", i),
-            _ => String::new()
+            InstOperand::Label(l) => l.clone(),
+            InstOperand::Str(s) => String::from(s.clone()),
+            InstOperand::Ptr(r, i) => {
+                match i {
+                    1 => format!("byte ptr[{}]", r),
+                    4 => format!("dword ptr[{}]", r),
+                    8 => format!("qword ptr[{}]", r),
+                    _ => unreachable!()
+                }
+            },
+            InstOperand::ElseFlag(i) =>  format!(".Lelse{}", i),
+            InstOperand::BeginFlag(i) =>  format!(".Lbegin{}", i),
+            InstOperand::EndFlag(i) =>  format!(".Lend{}", i),
+            InstOperand::PtrAdd(s, r) => format!("[{} + {}]", s, r),
+
         }
+    }
+}
+
+impl Display for InstOperand {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        f.write_str(&self.to_string())
     }
 }
 
@@ -148,18 +173,55 @@ pub struct Instruction {
     pub operand1: Option<InstOperand>,
     pub operand2: Option<InstOperand>,
 }
-
 impl Instruction {
-    pub fn to_string(&self) -> String {
+    pub fn to_string4linux(&self) -> String {
+        let mut res = format!("  {}", self.operator.to_string4linux());
+        if let Some(_) = self.operand1 {
+            res += " ";
+            res += &self.operand1.as_ref().unwrap().to_string()[..]
+        }
+        if let Some(_) = self.operand2 {
+            res += ", ";
+            res += &self.operand2.as_ref().unwrap().to_string()[..]
+        }
+        res
+    }
+}
+
+impl ToString for Instruction {
+    fn to_string(&self) -> String {
         let mut res = format!("  {}", self.operator.to_string());
         if let Some(_) = self.operand1 {
             res += " ";
             res += &self.operand1.as_ref().unwrap().to_string()[..]
         }
         if let Some(_) = self.operand2 {
-            res += " ";
+            res += ", ";
             res += &self.operand2.as_ref().unwrap().to_string()[..]
         }
         res
+    }
+}
+
+pub enum Assembly {
+    Inst(Instruction),
+    Other(String),
+}
+
+impl Assembly {
+    pub fn to_string4linux(&self) -> String {
+        match self {
+            Assembly::Inst(i) => i.to_string4linux(),
+            Assembly::Other(o) => o.clone(),
+        }
+    }
+}
+
+impl ToString for Assembly {
+    fn to_string(&self) -> String {
+        match self {
+            Assembly::Inst(i) => i.to_string(),
+            Assembly::Other(o) => o.clone(),
+        }
     }
 }

@@ -1,14 +1,14 @@
-use std::io::Write;
 use crate::node::{Node, NodeType};
 use crate::error::{error, error_at};
 use std::collections::VecDeque;
 use crate::ast::{ASTBuilder};
 use crate::ctype::Type;
 use crate::func::Func;
-use crate::instruction::{Instruction, InstOperator, InstOperand, Register};
+use crate::instruction::{Instruction, InstOperator, InstOperand, Register, Assembly};
 use crate::instruction::{InstOperator::*, Register::*};
 use std::fmt::Display;
 use crate::global::{GlobalVariable, GlobalVariableData};
+use crate::instruction::InstOperand::{Ptr, PtrAdd, ElseFlag, EndFlag, BeginFlag};
 
 pub struct AsmGenerator<'a> {
     code: &'a str,
@@ -18,9 +18,10 @@ pub struct AsmGenerator<'a> {
     loop_stack: VecDeque<usize>,
     builder: &'a ASTBuilder<'a>,
     current_stack_size: usize,
-    pub instructions: Vec<Instruction>,
+    pub assemblies: Vec<Assembly>,
 }
 
+#[derive(Clone, Copy)]
 pub enum Os {
     Linux,
     MacOS,
@@ -38,24 +39,24 @@ impl<'a> AsmGenerator<'a> {
             branch_count: 0,
             loop_stack: VecDeque::new(),
             current_stack_size: 0,
-            instructions: Vec::new(),
+            assemblies: Vec::new(),
         }
     }
 
     pub fn gen(&mut self) {
-        self.writeln(".intel_syntax noprefix");
+        self.push_assembly(".intel_syntax noprefix");
         if let Os::MacOS = self.target_os {
-            self.writeln(".section __TEXT,__text,regular,pure_instructions");
+            self.push_assembly(".section __TEXT,__text,regular,pure_instructions");
+        } else {
+            self.push_assembly(".section .text");
         }
         for (s, f) in &self.builder.functions {
             self.gen_func(s, f);
         }
-        if self.builder.global_variables.len() != 0 {
-            if let Os::MacOS = self.target_os {
-                self.writeln(".section __DATA,__data");
-            } else {
-                self.writeln(".section .data");
-            }
+        if let Os::MacOS = self.target_os {
+            self.push_assembly(".section __DATA,__data");
+        } else {
+            self.push_assembly(".section .data");
         }
         for (s, gv) in &self.builder.global_variables {
             self.gen_global_variable(s, gv);
@@ -66,19 +67,19 @@ impl<'a> AsmGenerator<'a> {
     pub fn gen_string_literals(&mut self) {
         if self.builder.string_literals.len() != 0 {
             if let Os::MacOS = self.target_os {
-                self.writeln(".section __TEXT,__cstring,cstring_literals");
+                self.push_assembly(".section __TEXT,__cstring,cstring_literals");
             } else {
-                self.writeln(".section .data");
+                self.push_assembly(".section .data");
             }
             for (i, str) in self.builder.string_literals.iter().enumerate() {
-                self.writeln(format!("L_.str.{}:", i));
-                self.writeln(format!("  .asciz \"{}\"", str));
+                self.push_assembly(format!("L_.str.{}:", i));
+                self.push_assembly(format!("  .asciz \"{}\"", str));
             }
         }
     }
 
     pub fn gen_global_variable(&mut self, name: &str, gv: &GlobalVariable) {
-        self.writeln(format!("{}:", self.with_prefix(name)));
+        self.push_assembly(format!("{}:", self.with_prefix(name)));
         self.gen_initializer_element(&gv.ty, gv.data.as_ref())
     }
 
@@ -95,22 +96,22 @@ impl<'a> AsmGenerator<'a> {
                     }
                     rest_count -= v.len();
                 }
-                self.writeln(format!("  .zero {}", children_ty.size_of() * rest_count));
+                self.push_assembly(format!("  .zero {}", children_ty.size_of() * rest_count));
             }
             Type::Char => {
-                self.writeln(format!(
+                self.push_assembly(format!(
                     "  .byte {}",
                     if let Some(GlobalVariableData::Elem(s)) = data { s } else { "0" }
                 ));
             }
             Type::Int => {
-                self.writeln(format!(
+                self.push_assembly(format!(
                     "  .4byte {}",
                     if let Some(GlobalVariableData::Elem(s)) = data { s } else { "0" }
                 ));
             }
             _ => {
-                self.writeln(format!(
+                self.push_assembly(format!(
                     "  .8byte {}",
                     if let Some(GlobalVariableData::Elem(s)) = data { s } else { "0" }
                 ));
@@ -122,8 +123,8 @@ impl<'a> AsmGenerator<'a> {
         if let None = func.body {
             return;
         }
-        self.writeln(format!(".globl {}", self.with_prefix(name)));
-        self.writeln(format!("{}:", self.with_prefix(name)));
+        self.push_assembly(format!(".globl {}", self.with_prefix(name)));
+        self.push_assembly(format!("{}:", self.with_prefix(name)));
 
         // prologue
         self.inst1(PUSH, RBP);
@@ -133,13 +134,14 @@ impl<'a> AsmGenerator<'a> {
             if let NodeType::LocalVar = arg.nt {
                 self.inst2(MOV, RAX, RBP);
                 self.inst2(SUB, RAX, arg.offset.unwrap());
-                self.inst2(MOV, ptr_with_size(RAX, 8), ARGS_REG[i]);
+                self.inst2(MOV, Ptr(RAX, 8), ARGS_REG[i]);
             } else {
                 error_at(self.code, arg.token.as_ref().unwrap().pos, "ident expected");
             }
         }
         self.current_stack_size = func.offset_size;
         self.gen_with_node(func.body.as_ref().unwrap());
+        self.inst2(MOV, RAX, 0); // default return value
         self.epilogue();
     }
 
@@ -180,28 +182,28 @@ impl<'a> AsmGenerator<'a> {
                 self.gen_with_node(node.cond.as_ref().unwrap());
                 self.inst1(POP, RAX);
                 self.inst2(CMP, RAX, 0);
-                self.inst1(JE, else_flag(branch_num));
+                self.inst1(JE, ElseFlag(branch_num));
                 self.gen_with_node(node.then.as_ref().unwrap());
-                self.inst1(JMP, end_flag(branch_num));
-                self.writeln(format!(".Lelse{}:", branch_num));
+                self.inst1(JMP, EndFlag(branch_num));
+                self.push_assembly(format!("{}:", ElseFlag(branch_num)));
                 if let Some(_) = node.els {
                     self.gen_with_node(node.els.as_ref().unwrap());
                 }
-                self.writeln(format!(".Lend{}:", branch_num));
+                self.push_assembly(format!("{}:", EndFlag(branch_num)));
                 return;
             }
             NodeType::While => {
                 let branch_num = self.new_branch_num();
                 self.loop_stack.push_back(branch_num);
-                self.writeln(format!(".Lbegin{}:", branch_num));
+                self.push_assembly(format!("{}:", BeginFlag(branch_num)));
                 self.reset_stack();
                 self.gen_with_node(node.cond.as_ref().unwrap());
                 self.inst1(POP, RAX);
                 self.inst2(CMP, RAX, 0);
-                self.inst1(JE, end_flag(branch_num));
+                self.inst1(JE, EndFlag(branch_num));
                 self.gen_with_node(node.then.as_ref().unwrap());
-                self.inst1(JMP, begin_flag(branch_num));
-                self.writeln(format!(".Lend{}:", branch_num));
+                self.inst1(JMP, BeginFlag(branch_num));
+                self.push_assembly(format!("{}:", EndFlag(branch_num)));
                 self.loop_stack.pop_back();
                 return;
             }
@@ -212,7 +214,7 @@ impl<'a> AsmGenerator<'a> {
                     self.gen_with_node(node.ini.as_ref().unwrap());
                     self.inst1(POP, RAX);
                 }
-                self.writeln(format!(".Lbegin{}:", branch_num));
+                self.push_assembly(format!("{}:", BeginFlag(branch_num)));
                 self.reset_stack();
                 if let Some(_) = node.cond {
                     self.gen_with_node(node.cond.as_ref().unwrap());
@@ -221,14 +223,14 @@ impl<'a> AsmGenerator<'a> {
                     self.inst2(MOV, RAX, 1);
                 }
                 self.inst2(CMP, RAX, 0);
-                self.inst1(JE, end_flag(branch_num));
+                self.inst1(JE, EndFlag(branch_num));
                 self.gen_with_node(node.then.as_ref().unwrap());
                 if let Some(_) = node.upd {
                     self.gen_with_node(node.upd.as_ref().unwrap());
                     self.inst1(POP, RAX);
                 }
-                self.inst1(JMP, begin_flag(branch_num));
-                self.writeln(format!(".Lend{}:", branch_num));
+                self.inst1(JMP, BeginFlag(branch_num));
+                self.push_assembly(format!("{}:", EndFlag(branch_num)));
                 self.loop_stack.pop_back();
                 return;
             }
@@ -238,7 +240,7 @@ impl<'a> AsmGenerator<'a> {
             }
             NodeType::Break => {
                 if let Some(&branch_num) = self.loop_stack.back() {
-                    self.inst1(JMP, end_flag(branch_num.clone()));
+                    self.inst1(JMP, EndFlag(branch_num.clone()));
                 } else {
                     error_at(self.code, node.token.as_ref().unwrap().pos, "unexpected break found");
                 }
@@ -284,14 +286,14 @@ impl<'a> AsmGenerator<'a> {
                 self.inst1(POP, RDI);
                 self.inst1(POP, RAX);
                 match node.lhs.as_ref().unwrap().resolve_type() {
-                    Some(Type::Int) => {
-                        self.inst2(MOV, ptr_with_size(RAX, 4), EDI);
-                    }
                     Some(Type::Char) => {
-                        self.inst2(MOV, ptr_with_size(RAX, 1), DIL);
+                        self.inst2(MOV, Ptr(RAX, 1), DIL);
+                    }
+                    Some(Type::Int) => {
+                        self.inst2(MOV, Ptr(RAX, 4), EDI);
                     }
                     _ => {
-                        self.inst2(MOV, ptr_with_size(RAX, 8), RDI);
+                        self.inst2(MOV, Ptr(RAX, 8), RDI);
                     }
                 }
                 self.inst1(PUSH, RDI);
@@ -359,10 +361,9 @@ impl<'a> AsmGenerator<'a> {
         match node.nt {
             NodeType::GlobalVar => {
                 if node.dest != "" {
-                    self.inst2(LEA, RAX, ptr_with_offset(RIP, &node.dest));
+                    self.inst2(LEA, RAX, PtrAdd(RIP, node.dest.clone()));
                 } else {
-                    self.inst2(LEA, RAX,
-                               ptr_with_offset(RIP, self.with_prefix(&node.global_name)));
+                    self.inst2(LEA, RAX, PtrAdd(RIP, self.with_prefix(&node.global_name)));
                 }
                 self.inst1(PUSH, RAX);
             }
@@ -383,54 +384,43 @@ impl<'a> AsmGenerator<'a> {
     fn deref_rax(&mut self, node: &Node) {
         match node.resolve_type() {
             Some(Type::Int) => {
-                self.inst2(MOVSXD, RAX, ptr_with_size(RAX, 4));
+                self.inst2(MOVSXD, RAX, Ptr(RAX, 4));
             }
             Some(Type::Char) => {
-                self.inst2(MOVSX, RAX, ptr_with_size(RAX, 1));
+                self.inst2(MOVSX, RAX, Ptr(RAX, 1));
             }
             _ => {
-                self.inst2(MOV, RAX, ptr_with_size(RAX, 8));
+                self.inst2(MOV, RAX, Ptr(RAX, 8));
             }
         }
     }
 
     fn inst0(&mut self, operator: InstOperator) {
-        writeln!(
-            self.buf, "  {}",
-            if let Os::MacOS = self.target_os { operator.to_string() } else { operator.to_string_for_linux() }
-        ).unwrap();
-        self.instructions.push(
-            Instruction { operator, operand1: None, operand2: None }
+        self.assemblies.push(
+            Assembly::Inst(
+                Instruction { operator, operand1: None, operand2: None }
+            )
         )
     }
     fn inst1<T1>(&mut self, operator: InstOperator, operand1: T1) where
-        T1: Into<InstOperand> + std::fmt::Display {
-        writeln!(
-            self.buf,
-            "  {} {}",
-            if let Os::MacOS = self.target_os { operator.to_string() } else { operator.to_string_for_linux() },
-            operand1
-        ).unwrap();
-        self.instructions.push(
-            Instruction { operator, operand1: Some(operand1.into()), operand2: None }
+        T1: Into<InstOperand> {
+        self.assemblies.push(
+            Assembly::Inst(
+                Instruction { operator, operand1: Some(operand1.into()), operand2: None }
+            )
         )
     }
     fn inst2<T1, T2>(&mut self, operator: InstOperator, operand1: T1, operand2: T2) where
-        T1: Into<InstOperand> + std::fmt::Display, T2: Into<InstOperand> + std::fmt::Display {
-        writeln!(
-            self.buf,
-            "  {} {}, {}",
-            if let Os::MacOS = self.target_os { operator.to_string() } else { operator.to_string_for_linux() },
-            operand1,
-            operand2
-        ).unwrap();
-        self.instructions.push(
-            Instruction { operator, operand1: Some(operand1.into()), operand2: Some(operand2.into()) }
+        T1: Into<InstOperand>, T2: Into<InstOperand> {
+        self.assemblies.push(
+            Assembly::Inst(
+                Instruction { operator, operand1: Some(operand1.into()), operand2: Some(operand2.into()) }
+            )
         )
     }
 
-    fn writeln(&mut self, s: impl Display) {
-        writeln!(self.buf, "{}", s).unwrap();
+    fn push_assembly(&mut self, s: impl ToString) {
+        self.assemblies.push(Assembly::Other(s.to_string()))
     }
 
     fn with_prefix<T: Display>(&self, s: T) -> String {
@@ -445,30 +435,5 @@ impl<'a> AsmGenerator<'a> {
     fn reset_stack(&mut self) {
         self.inst2(MOV, RSP, RBP);
         self.inst2(SUB, RSP, self.current_stack_size);
-    }
-}
-
-fn ptr_with_offset(a: impl Display, b: impl Display) -> String {
-    format!("[{} + {}]", a, b)
-}
-
-fn else_flag(branch_number: usize) -> String {
-    format!(".Lelse{}", branch_number)
-}
-
-fn end_flag(branch_number: usize) -> String {
-    format!(".Lend{}", branch_number)
-}
-
-fn begin_flag(branch_number: usize) -> String {
-    format!(".Lbegin{}", branch_number)
-}
-
-fn ptr_with_size(ptr: impl Display, byte: usize) -> String {
-    match byte {
-        1 => format!("byte ptr[{}]", ptr),
-        4 => format!("dword ptr[{}]", ptr),
-        8 => format!("qword ptr[{}]", ptr),
-        _ => unreachable!()
     }
 }
