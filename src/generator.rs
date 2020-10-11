@@ -47,7 +47,7 @@ impl<'a> AsmGenerator<'a> {
         if let Os::MacOS = self.target_os {
             self.writeln(".section __TEXT,__text,regular,pure_instructions");
         }
-        for (s, f) in &self.builder.global_functions {
+        for (s, f) in &self.builder.functions {
             self.gen_func(s, f);
         }
         if self.builder.global_variables.len() != 0 {

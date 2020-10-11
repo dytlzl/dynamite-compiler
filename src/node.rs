@@ -35,25 +35,33 @@ impl Default for NodeType {
 }
 
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct Node {
     pub nt: NodeType,
+    pub cty: Option<Type>,
     pub token: Option<Token>,
     pub lhs: Option<Box<Node>>,
     pub rhs: Option<Box<Node>>,
+    // for number
+    pub value: Option<usize>,
+    // for "if", "for", "while" statement
     pub cond: Option<Box<Node>>,
     pub then: Option<Box<Node>>,
+    // for "if" statement
     pub els: Option<Box<Node>>,
+    // for "for" statement
     pub ini: Option<Box<Node>>,
     pub upd: Option<Box<Node>>,
+    // for block and definition of local variables
     pub children: Vec<Node>,
-    pub body: Option<Box<Node>>,
-    pub value: Option<usize>,
+    // flag of global variables
     pub global_name: String,
-    pub dest: String, // flag of string literal
+    // flag of string literal
+    pub dest: String,
+    // for calling function
     pub args: Vec<Node>,
-    pub cty: Option<Type>,
-    pub offset: Option<usize>, // for local variables
+    // for declaration of local variables
+    pub offset: Option<usize>,
 }
 
 impl Node {
@@ -79,14 +87,6 @@ impl Node {
             token,
             nt: NodeType::Num,
             value: Some(value),
-            ..Self::default()
-        }
-    }
-    pub fn new_with_ident(token: Option<Token>, nt: NodeType, offset: usize) -> Self {
-        Self {
-            token,
-            nt,
-            offset: Some(offset),
             ..Self::default()
         }
     }
@@ -137,7 +137,7 @@ impl Node {
                 if let Some(lhs) = self.lhs.as_ref() {
                     if let (None, Some(rhs)) = (lhs.dest_type(), self.rhs.as_ref()) {
                         if let Some(_) = rhs.dest_type() {
-                            return rhs.resolve_type()
+                            return rhs.resolve_type();
                         }
                     }
                     lhs.resolve_type()
@@ -152,6 +152,38 @@ impl Node {
             t.dest_type()
         } else {
             None
+        }
+    }
+    pub fn print(&self, indent: usize) {
+        let indent_str = " ".repeat(indent);
+        match self.nt {
+            NodeType::LocalVar => {
+                eprintln!("{}LocalVar: {{ type: {:?}, offset: {} }}", &indent_str,
+                          self.cty.as_ref().unwrap(), self.offset.unwrap());
+            }
+            NodeType::GlobalVar => {
+                eprintln!("{}GlobalVar: {{ name: {}{} }}", &indent_str,
+                          &self.global_name, &self.dest);
+            }
+            NodeType::Num => {
+                eprintln!("{}Num: {}", &indent_str, self.value.unwrap());
+            }
+            _ => {
+                eprintln!("{}{:?} {{", &indent_str, self.nt);
+                for child in &self.children {
+                    child.print(indent+2);
+                }
+                for child in &self.args{
+                    child.print(indent+2);
+                }
+                if let Some(child) = &self.lhs {
+                    child.print(indent+2);
+                }
+                if let Some(child) = &self.rhs {
+                    child.print(indent+2);
+                }
+                eprintln!("{}}}", &indent_str);
+            }
         }
     }
 }

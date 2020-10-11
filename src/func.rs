@@ -12,3 +12,15 @@ pub struct Func {
     pub args: Vec<Node>,
 }
 
+impl Func {
+    pub fn print(&self) {
+        eprintln!("args:");
+        for arg in &self.args {
+            eprintln!("{:?}", arg);
+        }
+        eprintln!("body:");
+        if let Some(n) = &self.body {
+            n.print(0);
+        }
+    }
+}

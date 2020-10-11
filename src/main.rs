@@ -28,6 +28,9 @@ fn main() {
     }
     let mut builder = ASTBuilder::new(&code, &tokenizer.tokens);
     builder.build();
+    if is_debug {
+        builder.print_functions();
+    }
     #[cfg(target_os = "linux")]
         let target_os = Os::Linux;
     #[cfg(target_os = "macos")]

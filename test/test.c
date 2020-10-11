@@ -73,6 +73,7 @@ int test30() {
     return arr[0][1][1]*arr[1][0][1]*b;
 }
 int main() {
+    // expression test
     assert(0, 0);
     assert(42, 42);
     assert(-7, -7);
@@ -84,6 +85,11 @@ int main() {
     assert(1, 124<=31*4);
     assert(0, 124 > 31*4);
     assert(1, 124>=31*4);
+    int b, c = 4, *d, e[3];
+    e[2] = 5; b = 3; d = &e[2];
+    assert(60, b*c**d);
+
+    // function test
     assert(104, add6(Add(3, 8), 2, 3, 4, 5, 6));
     assert(12, test01());
     assert(1, test02());
@@ -113,9 +119,6 @@ int main() {
     assert(3, test26());
     a = -3;
     assert(1836311903, fib(46));
-    int b, c = 4, *d, e[3];
-    e[2] = 5; b = 3; d = &e[2];
-    assert(60, b*c**d);
     assert(616, test27());
     assert(639, test28());
     assert(150, test29());

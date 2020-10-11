@@ -13,7 +13,7 @@ pub struct ASTBuilder<'a> {
     cur: usize,
     pub offset_size: usize,
     offset_map: HashMap<String, (Type, usize)>,
-    pub global_functions: HashMap<String, Func>,
+    pub functions: HashMap<String, Func>,
     pub global_variables: HashMap<String, GlobalVariable>,
     pub string_literals: Vec<String>,
 }
@@ -26,11 +26,11 @@ impl<'a> ASTBuilder<'a> {
             cur: 0,
             offset_size: 0,
             offset_map: HashMap::new(),
-            global_functions: HashMap::new(),
+            functions: HashMap::new(),
             global_variables: HashMap::new(),
             string_literals: Vec::new(),
         };
-        builder.global_functions.insert(
+        builder.functions.insert(
             String::from("printf"),
             Func {
                 arg_types: vec![Type::Ptr(Box::new(Type::Char))],
@@ -38,7 +38,7 @@ impl<'a> ASTBuilder<'a> {
                 ..Func::default()
             },
         );
-        builder.global_functions.insert(
+        builder.functions.insert(
             String::from("puts"),
             Func {
                 arg_types: vec![Type::Ptr(Box::new(Type::Char))],
@@ -46,7 +46,7 @@ impl<'a> ASTBuilder<'a> {
                 ..Func::default()
             },
         );
-        builder.global_functions.insert(
+        builder.functions.insert(
             String::from("putchar"),
             Func {
                 arg_types: vec![Type::Char],
@@ -54,7 +54,7 @@ impl<'a> ASTBuilder<'a> {
                 ..Func::default()
             },
         );
-        builder.global_functions.insert(
+        builder.functions.insert(
             String::from("exit"),
             Func {
                 body: None,
@@ -110,11 +110,7 @@ impl<'a> ASTBuilder<'a> {
         }
     }
     fn at_eof(&self) -> bool {
-        if let TokenType::EOF = self.tokens[self.cur].tt {
-            true
-        } else {
-            false
-        }
+        self.cur >= self.tokens.len()
     }
     pub fn build(&mut self) {
         while !self.at_eof() {
@@ -192,7 +188,7 @@ impl<'a> ASTBuilder<'a> {
             let arg_types: Vec<Type> = args.iter().map(
                 |arg| { arg.resolve_type().clone().unwrap() }
             ).collect();
-            self.global_functions.insert(
+            self.functions.insert(
                 t.s_value.clone(),
                 Func {
                     arg_types: arg_types.iter().map(|ty| ty.clone()).collect(),
@@ -201,7 +197,7 @@ impl<'a> ASTBuilder<'a> {
                     ..Func::default()
                 });
             let body = self.consume_block();
-            self.global_functions.insert(
+            self.functions.insert(
                 t.s_value.clone(),
                 Func {
                     body,
@@ -538,11 +534,11 @@ impl<'a> ASTBuilder<'a> {
             node
         } else if let Some(t) = self.consume_ident() {
             if let Some(_) = self.consume_str("(") {
-                if !self.global_functions.contains_key(&t.s_value) {
+                if !self.functions.contains_key(&t.s_value) {
                     error_at(self.code, t.pos, "undefined function");
                 }
                 let return_type =
-                    self.global_functions.get(&t.s_value).unwrap().return_type.clone();
+                    self.functions.get(&t.s_value).unwrap().return_type.clone();
                 let mut args: Vec<Node> = Vec::new();
                 if let None = self.consume_str(")") {
                     args.push(self.expr());
@@ -644,6 +640,15 @@ impl<'a> ASTBuilder<'a> {
     fn new_string_literal(&mut self, s: &str) -> String {
         self.string_literals.push(s.to_string());
         format!("L_.str.{}", self.string_literals.len() - 1)
+    }
+
+    pub fn print_functions(&self) {
+        self.functions.iter().for_each(|(s, f)| {
+            if let Some(..) = f.body {
+                eprintln!("[FUNC: {}]", s);
+                f.print();
+            }
+        })
     }
 }
 
