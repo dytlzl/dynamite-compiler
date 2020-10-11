@@ -50,10 +50,10 @@ pub struct Node {
     pub body: Option<Box<Node>>,
     pub value: Option<usize>,
     pub global_name: String,
-    pub dest: String,
+    pub dest: String, // flag of string literal
     pub args: Vec<Node>,
     pub cty: Option<Type>,
-    pub offset: Option<usize>,
+    pub offset: Option<usize>, // for local variables
 }
 
 impl Node {

@@ -7,7 +7,7 @@ use crate::func::Func;
 use crate::global::{GlobalVariable, GlobalVariableData};
 use std::mem::swap;
 
-pub struct AstBuilder<'a> {
+pub struct ASTBuilder<'a> {
     code: &'a str,
     tokens: &'a Vec<Token>,
     cur: usize,
@@ -18,7 +18,7 @@ pub struct AstBuilder<'a> {
     pub string_literals: Vec<String>,
 }
 
-impl<'a> AstBuilder<'a> {
+impl<'a> ASTBuilder<'a> {
     pub fn new(code: &'a str, tokens: &'a Vec<Token>) -> Self {
         let mut builder = Self {
             code,
@@ -110,7 +110,7 @@ impl<'a> AstBuilder<'a> {
         }
     }
     fn at_eof(&self) -> bool {
-        if let TokenType::Eof = self.tokens[self.cur].tt {
+        if let TokenType::EOF = self.tokens[self.cur].tt {
             true
         } else {
             false
@@ -145,21 +145,13 @@ impl<'a> AstBuilder<'a> {
             if let Some(dest) = ty.dest_type() { dest.size_of() } else { ty.size_of() };
         self.offset_size += segment_size - self.offset_size % segment_size;
         self.offset_map.insert(t.s_value.clone(), (ty.clone(), self.offset_size));
-        let mut node = Node {
+        Node {
             token: Some(t),
             nt: NodeType::LocalVar,
             cty: Some(ty),
             offset: Some(self.offset_size),
             ..Node::default()
-        };
-        if let Some(t) = self.consume_str("=") {
-            node = Node::new_with_op(
-                Some(t),
-                NodeType::Assign,
-                node,
-                self.expr());
         }
-        node
     }
     fn consume_type(&mut self) -> Option<Type> {
         if let Some(_) = self.consume_str("int") {
@@ -184,19 +176,18 @@ impl<'a> AstBuilder<'a> {
         let ty = self.expect_type();
         let cur_to_back = self.cur;
         let (t, return_type) = self.expect_ident_with_type(ty.clone());
-        if let Some(_) = self.consume_str("(") {
+        if let Some(_) = self.consume_str("(") { // function
             let mut args: Vec<Node> = Vec::new();
             if let None = self.consume_str(")") {
-                let ty = self.expect_type();
-                args.push(self.new_local_variable(ty));
-                while let None = self.consume_str(")") {
-                    self.expect(",");
+                loop {
                     let ty = self.expect_type();
                     args.push(self.new_local_variable(ty));
+                    if let None = self.consume_str(",") { break; }
                 }
-                if args.len() >= 7 {
-                    error_at(self.code, t.pos, "count of args must be less than 7")
-                }
+                self.expect(")");
+            }
+            if args.len() >= 7 {
+                error_at(self.code, t.pos, "count of args must be less than 7")
             }
             let arg_types: Vec<Type> = args.iter().map(
                 |arg| { arg.resolve_type().clone().unwrap() }
@@ -220,7 +211,7 @@ impl<'a> AstBuilder<'a> {
                     token: Some(t.clone()),
                     args,
                 });
-        } else {
+        } else { // global variable
             self.cur = cur_to_back; // back the cursor
             loop {
                 let (t, ty) = self.expect_ident_with_type(ty.clone());
@@ -242,12 +233,12 @@ impl<'a> AstBuilder<'a> {
     fn global_data(&mut self) -> GlobalVariableData {
         if let Some(_) = self.consume_str("{") {
             let mut vec = Vec::new();
-            loop {
-                if let Some(_) = self.consume_str(",") {
-                } else if let Some(_) = self.consume_str("}") {
-                    break;
+            if let None = self.consume_str("}") {
+                loop {
+                    vec.push(self.global_data());
+                    if let None = self.consume_str(",") { break; }
                 }
-                vec.push(self.global_data());
+                self.expect("}");
             }
             GlobalVariableData::Arr(vec)
         } else if let Some(t) = self.consume(TokenType::Str) {
@@ -328,7 +319,7 @@ impl<'a> AstBuilder<'a> {
             if let None = self.consume_str(";") {
                 ini = Some(
                     if let Some(ty) = self.consume_type() {
-                        self.define_local_variable(ty)
+                        self.local_variable_definition(ty)
                     } else {
                         self.expr()
                     }
@@ -349,7 +340,7 @@ impl<'a> AstBuilder<'a> {
             return node;
         }
         let node = if let Some(ty) = self.consume_type() {
-            self.define_local_variable(ty)
+            self.local_variable_definition(ty)
         } else if let Some(t) = self.consume_str("break") {
             Node {
                 token: Some(t),
@@ -365,10 +356,19 @@ impl<'a> AstBuilder<'a> {
         node
     }
 
-    pub fn define_local_variable(&mut self, ty: Type) -> Node {
+    pub fn local_variable_definition(&mut self, ty: Type) -> Node {
         let mut vec = Vec::new();
         loop {
-            vec.push(self.new_local_variable(ty.clone()));
+            let node = self.new_local_variable(ty.clone());
+            if let Some(t) = self.consume_str("=") {
+                let initializer = Node::new_with_op(
+                    Some(t),
+                    NodeType::Assign,
+                    node,
+                    self.expr());
+                // if initializer element exists, push into AST
+                vec.push(initializer);
+            }
             if let None = self.consume_str(",") {
                 break;
             }
@@ -577,30 +577,27 @@ impl<'a> AstBuilder<'a> {
                 ..Node::default()
             }
         };
-        if let Some(_) = self.consume_str("[") {
+        while let Some(b_token) = self.consume_str("[") {
             // Subscript array
-            self.cur -= 1;
-            while let Some(b_token) = self.consume_str("[") {
-                let mut rhs = self.expr();
-                self.expect("]");
-                if let Some(Type::Arr(..)) = node.resolve_type() {} else {
-                    if let Some(Type::Arr(..)) = rhs.resolve_type() {
-                        swap(&mut node, &mut rhs);
-                    }
+            let mut rhs = self.expr();
+            self.expect("]");
+            if let Some(Type::Arr(..)) = node.resolve_type() {} else {
+                if let Some(Type::Arr(..)) = rhs.resolve_type() {
+                    swap(&mut node, &mut rhs);
                 }
-                node = Node {
-                    token: Some(b_token.clone()),
-                    nt: NodeType::Add,
-                    lhs: Some(Box::new(node)),
-                    rhs: Some(Box::new(rhs)),
-                    ..Node::default()
-                };
-                node = Node {
-                    token: Some(b_token.clone()),
-                    nt: NodeType::Deref,
-                    lhs: Some(Box::new(node)),
-                    ..Node::default()
-                }
+            }
+            node = Node {
+                token: Some(b_token.clone()),
+                nt: NodeType::Add,
+                lhs: Some(Box::new(node)),
+                rhs: Some(Box::new(rhs)),
+                ..Node::default()
+            };
+            node = Node {
+                token: Some(b_token.clone()),
+                nt: NodeType::Deref,
+                lhs: Some(Box::new(node)),
+                ..Node::default()
             }
         }
         node

@@ -4,7 +4,7 @@ pub enum TokenType {
     Ident,
     Num,
     Str,
-    Eof,
+    EOF,
 }
 
 impl Default for TokenType {
@@ -36,7 +36,9 @@ impl Token {
             TokenType::Str => {
                 eprintln!("str: {}", &self.s_value)
             }
-            TokenType::Eof => {}
+            TokenType::EOF => {
+                eprintln!("EOF")
+            }
         }
     }
 }

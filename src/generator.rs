@@ -2,7 +2,7 @@ use std::io::Write;
 use crate::node::{Node, NodeType};
 use crate::error::{error, error_at};
 use std::collections::VecDeque;
-use crate::ast::{AstBuilder};
+use crate::ast::{ASTBuilder};
 use crate::ctype::Type;
 use crate::func::Func;
 use crate::instruction::{Instruction, InstOperator, InstOperand, Register};
@@ -16,7 +16,7 @@ pub struct AsmGenerator<'a> {
     target_os: Os,
     branch_count: usize,
     loop_stack: VecDeque<usize>,
-    builder: &'a AstBuilder<'a>,
+    builder: &'a ASTBuilder<'a>,
     current_stack_size: usize,
     pub instructions: Vec<Instruction>,
 }
@@ -29,7 +29,7 @@ pub enum Os {
 const ARGS_REG: [Register; 6] = [RDI, RSI, RDX, RCX, R8, R9];
 
 impl<'a> AsmGenerator<'a> {
-    pub fn new(builder: &'a AstBuilder<'a>, code: &'a str, target_os: Os) -> Self {
+    pub fn new(builder: &'a ASTBuilder<'a>, code: &'a str, target_os: Os) -> Self {
         Self {
             code,
             buf: Vec::new(),
@@ -133,7 +133,7 @@ impl<'a> AsmGenerator<'a> {
             if let NodeType::LocalVar = arg.nt {
                 self.inst2(MOV, RAX, RBP);
                 self.inst2(SUB, RAX, arg.offset.unwrap());
-                self.inst2(MOV, "[rax]", ARGS_REG[i]);
+                self.inst2(MOV, ptr_with_size(RAX, 8), ARGS_REG[i]);
             } else {
                 error_at(self.code, arg.token.as_ref().unwrap().pos, "ident expected");
             }
@@ -464,10 +464,10 @@ fn begin_flag(branch_number: usize) -> String {
     format!(".Lbegin{}", branch_number)
 }
 
-fn ptr_with_size(ptr: impl Display, size: usize) -> String {
-    match size {
-        4 => format!("dword ptr[{}]", ptr),
+fn ptr_with_size(ptr: impl Display, byte: usize) -> String {
+    match byte {
         1 => format!("byte ptr[{}]", ptr),
+        4 => format!("dword ptr[{}]", ptr),
         8 => format!("qword ptr[{}]", ptr),
         _ => unreachable!()
     }

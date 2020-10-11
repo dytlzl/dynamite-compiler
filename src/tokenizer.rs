@@ -215,7 +215,7 @@ impl Tokenizer {
         }
         self.tokens.push(
             Token {
-                tt: TokenType::Eof,
+                tt: TokenType::EOF,
                 pos: chars.len(),
                 i_value: 0,
                 s_value: String::new(),

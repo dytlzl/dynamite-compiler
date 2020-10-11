@@ -1,5 +1,5 @@
 use dynamite_compiler::{generator::Os, tokenizer::Tokenizer};
-use dynamite_compiler::ast::AstBuilder;
+use dynamite_compiler::ast::ASTBuilder;
 use dynamite_compiler::generator::AsmGenerator;
 use std::fs::File;
 use std::io::Read;
@@ -23,7 +23,7 @@ fn main() {
     }
     let mut tokenizer = Tokenizer::new();
     tokenizer.tokenize(&code);
-    let mut builder = AstBuilder::new(&code, &tokenizer.tokens);
+    let mut builder = ASTBuilder::new(&code, &tokenizer.tokens);
     builder.build();
     #[cfg(target_os = "linux")]
         let target_os = Os::Linux;

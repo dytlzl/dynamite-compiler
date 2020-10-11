@@ -5,7 +5,7 @@ int assert(int expected, int actual) {
     if (expected == actual) {
         printf("%d, OK\n", expected);
     } else {
-        printf("%ld expected, but got %ld\n", expected, actual);
+        printf("%d expected, but got %d\n", expected, actual);
         exit(1);
     }
     return 0;
