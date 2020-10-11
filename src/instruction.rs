@@ -73,6 +73,8 @@ pub enum Register {
     DIL,
     AL,
     RIP,
+    R8,
+    R9,
 }
 use Register::*;
 
@@ -92,6 +94,8 @@ impl Display for Register {
                 DIL => "dil",
                 AL => "al",
                 RIP => "rip",
+                R8 => "r8",
+                R9 => "r9",
             }
         )?;
         Ok(())

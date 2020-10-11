@@ -5,7 +5,7 @@ use std::collections::VecDeque;
 use crate::ast::{AstBuilder};
 use crate::ctype::Type;
 use crate::func::Func;
-use crate::instruction::{Instruction, InstOperator, InstOperand};
+use crate::instruction::{Instruction, InstOperator, InstOperand, Register};
 use crate::instruction::{InstOperator::*, Register::*};
 use std::fmt::Display;
 use crate::global::{GlobalVariable, GlobalVariableData};
@@ -26,7 +26,7 @@ pub enum Os {
     MacOS,
 }
 
-const ARGS_REG: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
+const ARGS_REG: [Register; 6] = [RDI, RSI, RDX, RCX, R8, R9];
 
 impl<'a> AsmGenerator<'a> {
     pub fn new(builder: &'a AstBuilder<'a>, code: &'a str, target_os: Os) -> Self {
@@ -130,7 +130,7 @@ impl<'a> AsmGenerator<'a> {
         self.inst2(MOV, RBP, RSP);
         self.inst2(SUB, RSP, func.offset_size);
         for (i, arg) in func.args.iter().enumerate() {
-            if let NodeType::LVar = arg.nt {
+            if let NodeType::LocalVar = arg.nt {
                 self.inst2(MOV, RAX, RBP);
                 self.inst2(SUB, RAX, arg.offset.unwrap());
                 self.inst2(MOV, "[rax]", ARGS_REG[i]);
@@ -155,7 +155,7 @@ impl<'a> AsmGenerator<'a> {
                 self.gen_with_vec(&node.children);
                 return;
             }
-            NodeType::Cf => {
+            NodeType::CallFunc => {
                 self.inst2(MOV, RAX, RSP);
                 self.inst2(ADD, RAX, 8);
                 self.inst2(MOV, RDI, 16);
@@ -190,7 +190,7 @@ impl<'a> AsmGenerator<'a> {
                 self.writeln(format!(".Lend{}:", branch_num));
                 return;
             }
-            NodeType::Whl => {
+            NodeType::While => {
                 let branch_num = self.new_branch_num();
                 self.loop_stack.push_back(branch_num);
                 self.writeln(format!(".Lbegin{}:", branch_num));
@@ -236,7 +236,7 @@ impl<'a> AsmGenerator<'a> {
                 self.gen_with_vec(&node.children);
                 return;
             }
-            NodeType::Brk => {
+            NodeType::Break => {
                 if let Some(&branch_num) = self.loop_stack.back() {
                     self.inst1(JMP, end_flag(branch_num.clone()));
                 } else {
@@ -244,7 +244,7 @@ impl<'a> AsmGenerator<'a> {
                 }
                 return;
             }
-            NodeType::Ret => {
+            NodeType::Return => {
                 self.gen_with_node(node.lhs.as_ref().unwrap());
                 self.inst1(POP, RAX);
                 self.epilogue();
@@ -254,7 +254,7 @@ impl<'a> AsmGenerator<'a> {
                 self.inst1(PUSH, node.value.unwrap());
                 return;
             }
-            NodeType::LVar | NodeType::GVar => {
+            NodeType::LocalVar | NodeType::GlobalVar => {
                 self.gen_addr(node);
                 if let Some(Type::Arr(_, _)) = node.resolve_type() {
                     return;
@@ -278,7 +278,7 @@ impl<'a> AsmGenerator<'a> {
                 self.inst1(PUSH, RAX);
                 return;
             }
-            NodeType::Asg => {
+            NodeType::Assign => {
                 self.gen_addr(node.lhs.as_ref().unwrap());
                 self.gen_with_node(node.rhs.as_ref().unwrap());
                 self.inst1(POP, RDI);
@@ -357,7 +357,7 @@ impl<'a> AsmGenerator<'a> {
 
     fn gen_addr(&mut self, node: &Node) {
         match node.nt {
-            NodeType::GVar => {
+            NodeType::GlobalVar => {
                 if node.dest != "" {
                     self.inst2(LEA, RAX, ptr_with_offset(RIP, &node.dest));
                 } else {
@@ -366,7 +366,7 @@ impl<'a> AsmGenerator<'a> {
                 }
                 self.inst1(PUSH, RAX);
             }
-            NodeType::LVar => {
+            NodeType::LocalVar => {
                 self.inst2(MOV, RAX, RBP);
                 self.inst2(SUB, RAX, node.offset.unwrap());
                 self.inst1(PUSH, RAX);

@@ -3,9 +3,9 @@ use crate::ctype::Type;
 
 #[derive(Debug, PartialEq)]
 pub enum NodeType {
-    Asg,
-    LVar,
-    GVar,
+    Assign,
+    LocalVar,
+    GlobalVar,
     Add,
     Sub,
     Mul,
@@ -16,14 +16,13 @@ pub enum NodeType {
     Lt,
     Le,
     Num,
-    Ret,
+    Return,
     If,
-    Whl,
+    While,
     For,
-    Brk,
+    Break,
     Block,
-    Cf,
-    Df,
+    CallFunc,
     Addr,
     Deref,
     DefVar,
@@ -104,7 +103,7 @@ impl Node {
     pub fn new_while_node(token: Option<Token>, cond: Node, then: Node) -> Self {
         Self {
             token,
-            nt: NodeType::Whl,
+            nt: NodeType::While,
             cond: Some(Box::new(cond)),
             then: Some(Box::new(then)),
             ..Self::default()
@@ -123,7 +122,7 @@ impl Node {
     }
     pub fn resolve_type(&self) -> Option<Type> {
         match self.nt {
-            NodeType::LVar | NodeType::Num | NodeType::Cf | NodeType::GVar => { self.cty.clone() }
+            NodeType::LocalVar | NodeType::Num | NodeType::CallFunc | NodeType::GlobalVar => { self.cty.clone() }
             NodeType::Addr => {
                 if let Some(ty) = self.lhs.as_ref().unwrap().resolve_type() {
                     Some(Type::Ptr(Box::new(ty)))
@@ -153,83 +152,6 @@ impl Node {
             t.dest_type()
         } else {
             None
-        }
-    }
-    pub fn format(&self) -> String {
-        match self.nt {
-            NodeType::Num => {
-                format!("{}", self.value.unwrap())
-            }
-            NodeType::LVar => {
-                format!("{:?}({})", self.nt, self.offset.unwrap())
-            }
-            NodeType::Ret | NodeType::Deref | NodeType::Addr => {
-                format!("{:?}({})",
-                        self.nt,
-                        self.lhs.as_ref().map(|n| n.format()).unwrap())
-            }
-            NodeType::Df => {
-                format!("{:?}({})",
-                        self.nt,
-                        self.body.as_ref().map(|n| n.format()).unwrap())
-            }
-            NodeType::Brk => {
-                format!("{:?}", self.nt)
-            }
-            NodeType::If => {
-                format!("{:?}({}, {}, {})",
-                        self.nt,
-                        self.cond.as_ref().map(|n| n.format()).unwrap(),
-                        self.then.as_ref().map(|n| n.format()).unwrap(),
-                        if let Some(_) = self.els {
-                            self.els.as_ref().map(|n| n.format()).unwrap()
-                        } else {
-                            String::from("None")
-                        })
-            }
-            NodeType::Whl => {
-                format!("{:?}({}, {})",
-                        self.nt,
-                        self.cond.as_ref().map(|n| n.format()).unwrap(),
-                        self.then.as_ref().map(|n| n.format()).unwrap())
-            }
-            NodeType::For => {
-                format!("{:?}({}, {}, {}, {})",
-                        self.nt,
-                        Self::format_optional_node(self.ini.as_ref()),
-                        Self::format_optional_node(self.cond.as_ref()),
-                        Self::format_optional_node(self.upd.as_ref()),
-                        Self::format_optional_node(self.then.as_ref()))
-            }
-            NodeType::Block => {
-                String::from("{") +
-                    &self.children.iter().map(
-                        |n| { n.format() }).collect::<Vec<String>>().join(", ") +
-                    "}"
-            }
-            NodeType::Cf => {
-                format!("{:?}(", self.nt) +
-                    &self.args.iter().map(
-                        |n| { n.format() }).collect::<Vec<String>>().join(", ") +
-                    ")"
-            }
-            NodeType::Add | NodeType::Sub | NodeType::Mul | NodeType::Div | NodeType::Mod |
-            NodeType::Asg | NodeType::Lt | NodeType::Le => {
-                format!("{:?}({}, {})",
-                        self.nt,
-                        self.lhs.as_ref().map(|n| n.format()).unwrap(),
-                        self.rhs.as_ref().map(|n| n.format()).unwrap())
-            }
-            _ => {
-                format!("{:?}", self.nt)
-            }
-        }
-    }
-    fn format_optional_node(n: Option<&Box<Node>>) -> String {
-        if let Some(_) = n {
-            n.map(|n| n.format()).unwrap()
-        } else {
-            String::from("None")
         }
     }
 }

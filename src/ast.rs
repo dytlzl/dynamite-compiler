@@ -147,7 +147,7 @@ impl<'a> AstBuilder<'a> {
         self.offset_map.insert(t.s_value.clone(), (ty.clone(), self.offset_size));
         let mut node = Node {
             token: Some(t),
-            nt: NodeType::LVar,
+            nt: NodeType::LocalVar,
             cty: Some(ty),
             offset: Some(self.offset_size),
             ..Node::default()
@@ -155,7 +155,7 @@ impl<'a> AstBuilder<'a> {
         if let Some(t) = self.consume_str("=") {
             node = Node::new_with_op(
                 Some(t),
-                NodeType::Asg,
+                NodeType::Assign,
                 node,
                 self.expr());
         }
@@ -353,11 +353,11 @@ impl<'a> AstBuilder<'a> {
         } else if let Some(t) = self.consume_str("break") {
             Node {
                 token: Some(t),
-                nt: NodeType::Brk,
+                nt: NodeType::Break,
                 ..Node::default()
             }
         } else if let Some(t) = self.consume_str("return") {
-            Node::new_with_op_and_lhs(Some(t), NodeType::Ret, self.expr())
+            Node::new_with_op_and_lhs(Some(t), NodeType::Return, self.expr())
         } else {
             self.expr()
         };
@@ -405,7 +405,7 @@ impl<'a> AstBuilder<'a> {
         let mut node = self.equality();
         if let Some(t) = self.consume_str("=") {
             // left-associative => while, right-associative => recursive function
-            node = Node::new_with_op(Some(t), NodeType::Asg, node, self.assign())
+            node = Node::new_with_op(Some(t), NodeType::Assign, node, self.assign())
         }
         node
     }
@@ -522,7 +522,7 @@ impl<'a> AstBuilder<'a> {
                 let s_value = t.s_value.clone();
                 Node {
                     token: Some(t),
-                    nt: NodeType::Cf,
+                    nt: NodeType::CallFunc,
                     global_name: String::from(s_value),
                     cty: Some(return_type),
                     args,
@@ -533,7 +533,7 @@ impl<'a> AstBuilder<'a> {
                     let (ty, offset) = self.offset_map.get(&t.s_value).unwrap();
                     Node {
                         token: Some(t.clone()),
-                        nt: NodeType::LVar,
+                        nt: NodeType::LocalVar,
                         cty: Some(ty.clone()),
                         offset: Some(offset.clone()),
                         ..Node::default()
@@ -542,7 +542,7 @@ impl<'a> AstBuilder<'a> {
                     let ty = self.global_variables.get(&t.s_value).unwrap().ty.clone();
                     Node {
                         token: Some(t.clone()),
-                        nt: NodeType::GVar,
+                        nt: NodeType::GlobalVar,
                         cty: Some(ty.clone()),
                         global_name: t.s_value.clone(),
                         ..Node::default()
@@ -556,7 +556,7 @@ impl<'a> AstBuilder<'a> {
             // String literal
             let node = Node {
                 token: Some(t.clone()),
-                nt: NodeType::GVar,
+                nt: NodeType::GlobalVar,
                 dest: self.new_string_literal(&t.s_value),
                 ..Node::default()
             };
