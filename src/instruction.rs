@@ -22,31 +22,8 @@ pub enum InstOperator {
     CMP,
 }
 
-use InstOperator::{
-    PUSH,
-    POP,
-    MOV,
-    ADD,
-    SUB,
-    RET,
-    CALL,
-    CQO,
-    JMP,
-    JE,
-    IMUL,
-    IDIV,
-    SETE,
-    SETNE,
-    SETL,
-    SETLE,
-    LEA,
-    MOVSX,
-    MOVSXD,
-    MOVZX,
-    CMP
-};
+use InstOperator::*;
 use std::fmt::{Display, Formatter, Debug, Error};
-
 
 impl InstOperator {
     pub fn to_string(&self) -> &str {
@@ -97,9 +74,27 @@ pub enum Register {
     AL,
     RIP,
 }
+use Register::*;
+
 impl Display for Register {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        std::fmt::Debug::fmt(&self, f)
+        f.write_str(
+            match self {
+                RAX => "rax",
+                RBX => "rbx",
+                RCX => "rcx",
+                RDX => "rdx",
+                RSI => "rsi",
+                RDI => "rdi",
+                RBP => "rbp",
+                RSP => "rsp",
+                EDI => "edi",
+                DIL => "dil",
+                AL => "al",
+                RIP => "rip",
+            }
+        )?;
+        Ok(())
     }
 }
 
