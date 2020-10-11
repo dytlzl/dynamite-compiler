@@ -13,7 +13,7 @@ test-linux:
 src := ./temp/main.c
 
 compile:
-	cargo run $(src) > ./temp/main.s
+	cargo run $(if $(debug),debug,) $(src) > ./temp/main.s
 
 assemble:
 	cc $(if $(linux),-no-pie,) -o ./temp/main ./temp/main.s 

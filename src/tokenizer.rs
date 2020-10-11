@@ -88,8 +88,7 @@ impl Tokenizer {
                             }
                         }
                         _ => {
-                            self.push_reserved_token(pos, String::from(chars[i].1));
-                            i += 1;
+                            self.push_reserved_token(pos, temp);
                         }
                     }
                 }

@@ -76,6 +76,7 @@ int main() {
     assert(0, 0);
     assert(42, 42);
     assert(-7, -7);
+    assert(13, 3 * (29 / (13-2) + 3) - 2);
     assert(28, 3 * (29 % (13-2) + 3) - 2);
     assert(10, -1* 4+2*+7);
     assert(1, 5-3==2);

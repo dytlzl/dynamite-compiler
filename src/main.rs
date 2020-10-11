@@ -23,6 +23,9 @@ fn main() {
     }
     let mut tokenizer = Tokenizer::new();
     tokenizer.tokenize(&code);
+    if is_debug {
+        tokenizer.print_tokens();
+    }
     let mut builder = ASTBuilder::new(&code, &tokenizer.tokens);
     builder.build();
     #[cfg(target_os = "linux")]
