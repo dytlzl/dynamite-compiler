@@ -301,10 +301,10 @@ impl<'a> AsmGenerator<'a> {
             }
             _ => {}
         }
-        self.gen_with_node(node.lhs.as_ref().unwrap());
         self.gen_with_node(node.rhs.as_ref().unwrap());
-        self.inst1(POP, RDI);
+        self.gen_with_node(node.lhs.as_ref().unwrap());
         self.inst1(POP, RAX);
+        self.inst1(POP, RDI);
         match node.nt {
             NodeType::Add => {
                 if let Some(t) = node.lhs.as_ref().unwrap().dest_type() {
@@ -328,8 +328,7 @@ impl<'a> AsmGenerator<'a> {
             NodeType::Mod => {
                 self.inst0(CQO);
                 self.inst1(IDIV, RDI);
-                self.inst1(PUSH, RDX);
-                return;
+                self.inst2(MOV, RAX, RDX);
             }
             NodeType::Eq | NodeType::Ne | NodeType::Lt | NodeType::Le => {
                 self.inst2(CMP, RAX, RDI);

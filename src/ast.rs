@@ -440,6 +440,26 @@ impl<'a> ASTBuilder<'a> {
         if let Some(t) = self.consume_str("=") {
             // left-associative => while, right-associative => recursive function
             node = Node::new_with_op(Some(t), NodeType::Assign, node, self.assign())
+        } else if let Some(t) = self.consume_str("+=") {
+            node = Node::new_with_op(
+                Some(t.clone()), NodeType::Assign, node.clone(),
+                Node::new_with_op(Some(t), NodeType::Add, node, self.assign()))
+        } else if let Some(t) = self.consume_str("-=") {
+            node = Node::new_with_op(
+                Some(t.clone()), NodeType::Assign, node.clone(),
+                Node::new_with_op(Some(t), NodeType::Sub, node, self.assign()))
+        } else if let Some(t) = self.consume_str("*=") {
+            node = Node::new_with_op(
+                Some(t.clone()), NodeType::Assign, node.clone(),
+                Node::new_with_op(Some(t), NodeType::Mul, node, self.assign()))
+        } else if let Some(t) = self.consume_str("/=") {
+            node = Node::new_with_op(
+                Some(t.clone()), NodeType::Assign, node.clone(),
+                Node::new_with_op(Some(t), NodeType::Div, node, self.assign()))
+        } else if let Some(t) = self.consume_str("%=") {
+            node = Node::new_with_op(
+                Some(t.clone()), NodeType::Assign, node.clone(),
+                Node::new_with_op(Some(t), NodeType::Mod, node, self.assign()))
         }
         node
     }
