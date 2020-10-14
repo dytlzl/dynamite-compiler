@@ -51,6 +51,7 @@ fi
 << CMT
 CMT
 
+assert 0 './test/expr.c'
 assert 0 './test/test.c'
 assert_stdout "value = 777" 'int value; int main() { value = 777; printf("value = %d\n", value); return 0;}'
 assert_stdout "value = 755" 'int value; int main() { char* fmt = "value = %d\n"; value = 755; printf(fmt, value); return 0;}'

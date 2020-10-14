@@ -464,12 +464,26 @@ impl<'a> ASTBuilder<'a> {
         node
     }
     fn equality(&mut self) -> Node {
-        let mut node = self.relational();
+        let mut node = self.bitwise();
         loop {
             if let Some(t) = self.consume_str("==") {
-                node = Node::new_with_op(Some(t), NodeType::Eq, node, self.relational())
+                node = Node::new_with_op(Some(t), NodeType::Eq, node, self.bitwise())
             } else if let Some(t) = self.consume_str("!=") {
-                node = Node::new_with_op(Some(t), NodeType::Ne, node, self.relational())
+                node = Node::new_with_op(Some(t), NodeType::Ne, node, self.bitwise())
+            } else {
+                return node;
+            }
+        }
+    }
+    fn bitwise(&mut self) -> Node {
+        let mut node = self.relational();
+        loop {
+            if let Some(t) = self.consume_str("&") {
+                node = Node::new_with_op(Some(t), NodeType::BitAnd, node, self.relational())
+            } else if let Some(t) = self.consume_str("^") {
+                node = Node::new_with_op(Some(t), NodeType::BitXor, node, self.relational())
+            } else if let Some(t) = self.consume_str("|") {
+                node = Node::new_with_op(Some(t), NodeType::BitOr, node, self.relational())
             } else {
                 return node;
             }

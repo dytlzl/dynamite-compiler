@@ -341,6 +341,15 @@ impl<'a> AsmGenerator<'a> {
                 }, AL);
                 self.inst2(MOVZX, RAX, AL);
             }
+            NodeType::BitAnd => {
+                self.inst2(AND, RAX, RDI);
+            }
+            NodeType::BitXor => {
+                self.inst2(XOR, RAX, RDI);
+            }
+            NodeType::BitOr => {
+                self.inst2(OR, RAX, RDI);
+            }
             _ => {
                 error("unexpected node");
             }

@@ -6,7 +6,7 @@ pub const RESERVED_WORDS: [&str; 7] = ["return", "if", "else", "while", "for", "
 pub const TYPES: [&str; 2] = ["int", "char"];
 pub const RESERVED_SYMBOLS: [&str; 31] = [
     "=", "+", "-", "*", "/", "%", "<", ">", "==", "!=", "+=", "-=", "*=", "/=", "%=", "<=", ">=",
-    "++", "--", "&", "{", "}", "(", ")", "[", "]", ",", ";", "/*", "//", "\""
+    "&", "^", "|", "{", "}", "(", ")", "[", "]", ",", ";", "/*", "//", "\""
 ];
 
 pub fn close_symbol(s: &str) -> Option<&str> {
@@ -172,7 +172,7 @@ impl Trie {
     pub fn new() -> Self {
         // Make a double array
         let mut double_array = Vec::with_capacity(1000);
-        double_array.extend(std::iter::repeat((0, 0)).take(END_SYMBOL*2));
+        double_array.extend(std::iter::repeat((0, 0)).take(END_SYMBOL*2+1));
         let mut trie = Self {
             double_array
         };
@@ -206,11 +206,11 @@ impl Trie {
             }
         }
         let offset = self.double_array[index].1;
+        if index + offset + END_SYMBOL > self.double_array.len() {
+            self.double_array.extend(std::iter::repeat((0, 0)).take(index +offset+END_SYMBOL*2-self.double_array.len()))
+        }
         for (&c_index, _) in &dict.children {
             self.double_array[index + offset + c_index].0 = index;
-            if index + offset + c_index > self.double_array.len() {
-                self.double_array.extend(std::iter::repeat((0, 0)).take(index +offset+END_SYMBOL*2-self.double_array.len()))
-            }
         }
         for (&c_index, d) in &dict.children {
             self.insert(index + offset + c_index, d);

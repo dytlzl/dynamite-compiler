@@ -20,6 +20,9 @@ pub enum InstOperator {
     MOVSXD,
     MOVZX,
     CMP,
+    AND,
+    OR,
+    XOR,
 }
 
 use InstOperator::*;
@@ -48,7 +51,10 @@ impl InstOperator {
             MOVSX => "movsx",
             MOVSXD => "movsxd",
             MOVZX => "movzx",
-            CMP => "cmp"
+            CMP => "cmp",
+            AND => "and",
+            OR => "or",
+            XOR => "xor",
         }
     }
     pub fn to_string4linux(&self) -> &str {

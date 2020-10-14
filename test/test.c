@@ -255,27 +255,20 @@ int test32() {
     r /= 2;
     return s - r;
 }
+int test32() {
+    int r = 1200;
+    int s = 299;
+    s *= s %= 39; // Undefined Behavior
+    r /= 2;
+    return s - r;
+}
+int test33() {
+    int r = 853634;
+    int x = 543636;
+    return r^x^x;
+}
 
 int main() {
-    // expression test
-    assert(0, 0);
-    assert(42, 42);
-    assert(-7, -7);
-    assert(13, 3 * (29 / (13 - 2) + 3) - 2);
-    assert(28, 3 * (29 % (13 - 2) + 3) - 2);
-    assert(10, -1 * 4 + 2 * +7);
-    assert(1, 5 - 3 == 2);
-    assert(1, 123 < 31 * 4);
-    assert(1, 124 <= 31 * 4);
-    assert(0, 124 > 31 * 4);
-    assert(1, 124 >= 31 * 4);
-    int b, c = 4, *d, e[3];
-    e[2] = 5;
-    b = 3;
-    d = &e[2];
-    assert(60, b * c * *d);
-
-    // function test
     assert(104, add6(Add(3, 8), 2, 3, 4, 5, 6));
     assert(12, test01());
     assert(1, test02());
@@ -311,5 +304,6 @@ int main() {
     assert(231, test30());
     assert(21, test31());
     assert(76, test32());
+    assert(853634, test33());
     return 0;
 }//
