@@ -9,6 +9,7 @@ pub enum InstOperator {
     CQO,
     JMP,
     JE,
+    JNE,
     IMUL,
     IDIV,
     SETE,
@@ -41,6 +42,7 @@ impl InstOperator {
             CQO => "cqo",
             JMP => "jmp",
             JE => "je",
+            JNE => "jne",
             IMUL => "imul",
             IDIV => "idiv",
             SETE => "sete",
@@ -139,7 +141,6 @@ impl InstOperand {
             InstOperand::BeginFlag(i) =>  format!(".Lbegin{}", i),
             InstOperand::EndFlag(i) =>  format!(".Lend{}", i),
             InstOperand::PtrAdd(s, r) => format!("[{} + {}]", s, r),
-
         }
     }
 }

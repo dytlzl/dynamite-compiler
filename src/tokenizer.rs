@@ -4,9 +4,9 @@ use std::collections::{HashSet, HashMap};
 
 pub const RESERVED_WORDS: [&str; 7] = ["return", "if", "else", "while", "for", "break", "sizeof"];
 pub const TYPES: [&str; 2] = ["int", "char"];
-pub const RESERVED_SYMBOLS: [&str; 31] = [
+pub const RESERVED_SYMBOLS: [&str; 33] = [
     "=", "+", "-", "*", "/", "%", "<", ">", "==", "!=", "+=", "-=", "*=", "/=", "%=", "<=", ">=",
-    "&", "^", "|", "{", "}", "(", ")", "[", "]", ",", ";", "/*", "//", "\""
+    "&", "^", "|", "&&", "||", "{", "}", "(", ")", "[", "]", ",", ";", "/*", "//", "\""
 ];
 
 pub fn close_symbol(s: &str) -> Option<&str> {
@@ -178,7 +178,7 @@ impl Trie {
         };
         // Make a tree of reserved symbols
         let mut root = Node::default();
-        for s in &RESERVED_SYMBOLS {
+        for s in RESERVED_SYMBOLS.iter() {
             let mut current_node = &mut root;
             for c in s.chars() {
                 let c_num = c as usize;

@@ -436,7 +436,7 @@ impl<'a> ASTBuilder<'a> {
         self.assign()
     }
     fn assign(&mut self) -> Node {
-        let mut node = self.equality();
+        let mut node = self.logical_or();
         if let Some(t) = self.consume_str("=") {
             // left-associative => while, right-associative => recursive function
             node = Node::new_with_op(Some(t), NodeType::Assign, node, self.assign())
@@ -463,27 +463,63 @@ impl<'a> ASTBuilder<'a> {
         }
         node
     }
-    fn equality(&mut self) -> Node {
-        let mut node = self.bitwise();
+    fn logical_or(&mut self) -> Node {
+        let mut node = self.logical_and();
         loop {
-            if let Some(t) = self.consume_str("==") {
-                node = Node::new_with_op(Some(t), NodeType::Eq, node, self.bitwise())
-            } else if let Some(t) = self.consume_str("!=") {
-                node = Node::new_with_op(Some(t), NodeType::Ne, node, self.bitwise())
+            if let Some(t) = self.consume_str("||") {
+                node = Node::new_with_op(Some(t), NodeType::LogicalOr, node, self.logical_and());
             } else {
                 return node;
             }
         }
     }
-    fn bitwise(&mut self) -> Node {
-        let mut node = self.relational();
+    fn logical_and(&mut self) -> Node {
+        let mut node = self.bitwise_or();
+        loop {
+            if let Some(t) = self.consume_str("&&") {
+                node = Node::new_with_op(Some(t), NodeType::LogicalAnd, node, self.bitwise_or());
+            } else {
+                return node;
+            }
+        }
+    }
+    fn bitwise_or(&mut self) -> Node {
+        let mut node = self.bitwise_xor();
+        loop {
+            if let Some(t) = self.consume_str("|") {
+                node = Node::new_with_op(Some(t), NodeType::BitOr, node, self.bitwise_xor())
+            } else {
+                return node;
+            }
+        }
+    }
+    fn bitwise_xor(&mut self) -> Node {
+        let mut node = self.bitwise_and();
+        loop {
+            if let Some(t) = self.consume_str("^") {
+                node = Node::new_with_op(Some(t), NodeType::BitXor, node, self.bitwise_and())
+            } else {
+                return node;
+            }
+        }
+    }
+    fn bitwise_and(&mut self) -> Node {
+        let mut node = self.equality();
         loop {
             if let Some(t) = self.consume_str("&") {
-                node = Node::new_with_op(Some(t), NodeType::BitAnd, node, self.relational())
-            } else if let Some(t) = self.consume_str("^") {
-                node = Node::new_with_op(Some(t), NodeType::BitXor, node, self.relational())
-            } else if let Some(t) = self.consume_str("|") {
-                node = Node::new_with_op(Some(t), NodeType::BitOr, node, self.relational())
+                node = Node::new_with_op(Some(t), NodeType::BitAnd, node, self.equality())
+            } else {
+                return node;
+            }
+        }
+    }
+    fn equality(&mut self) -> Node {
+        let mut node = self.relational();
+        loop {
+            if let Some(t) = self.consume_str("==") {
+                node = Node::new_with_op(Some(t), NodeType::Eq, node, self.relational())
+            } else if let Some(t) = self.consume_str("!=") {
+                node = Node::new_with_op(Some(t), NodeType::Ne, node, self.relational())
             } else {
                 return node;
             }

@@ -299,6 +299,30 @@ impl<'a> AsmGenerator<'a> {
                 self.inst1(PUSH, RDI);
                 return;
             }
+            NodeType::LogicalAnd => {
+                let branch_num = self.new_branch_num();
+                self.gen_with_node(node.lhs.as_ref().unwrap());
+                self.inst1(POP, RAX);
+                self.inst2(CMP, RAX, 0);
+                self.inst1(JE, EndFlag(branch_num));
+                self.gen_with_node(node.rhs.as_ref().unwrap());
+                self.inst1(POP, RAX);
+                self.push_assembly(format!("{}:", EndFlag(branch_num)));
+                self.inst1(PUSH, RAX);
+                return;
+            }
+            NodeType::LogicalOr => {
+                let branch_num = self.new_branch_num();
+                self.gen_with_node(node.lhs.as_ref().unwrap());
+                self.inst1(POP, RAX);
+                self.inst2(CMP, RAX, 0);
+                self.inst1(JNE, EndFlag(branch_num));
+                self.gen_with_node(node.rhs.as_ref().unwrap());
+                self.inst1(POP, RAX);
+                self.push_assembly(format!("{}:", EndFlag(branch_num)));
+                self.inst1(PUSH, RAX);
+                return;
+            }
             _ => {}
         }
         self.gen_with_node(node.rhs.as_ref().unwrap());

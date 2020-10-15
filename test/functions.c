@@ -268,6 +268,20 @@ int test33() {
     return r^x^x;
 }
 
+int test34() {
+    int x = 50;
+    if (x > 40 && x < 60) {
+        x += 30;
+    }
+    if (x > 60 && x / 2 == 30) {
+        x += 20;
+    }
+    if (x < -100 || x < 100 && x%10 == 0) {
+        x += 40;
+    }
+    return x;
+}
+
 int main() {
     assert(104, add6(Add(3, 8), 2, 3, 4, 5, 6));
     assert(12, test01());
@@ -305,5 +319,6 @@ int main() {
     assert(21, test31());
     assert(76, test32());
     assert(853634, test33());
+    assert(120, test34());
     return 0;
 }//
