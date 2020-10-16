@@ -282,7 +282,19 @@ int test34() {
     return x;
 }
 
-
+int test35() {
+    int x = 12;
+    x <<= 2;
+    x &= 96;
+    return x;
+}
+int test36() {
+    int x = 1;
+    x |= 48;
+    x >>= 2;
+    x ^= 3;
+    return x;
+}
 
 int main() {
     assert(104, add6(Add(3, 8), 2, 3, 4, 5, 6));
@@ -322,5 +334,7 @@ int main() {
     assert(76, test32());
     assert(853634, test33());
     assert(120, test34());
+    assert(32, test35());
+    assert(15, test36());
     return 0;
 }//

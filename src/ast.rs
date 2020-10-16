@@ -460,6 +460,26 @@ impl<'a> ASTBuilder<'a> {
             node = Node::new_with_op(
                 Some(t.clone()), NodeType::Assign, node.clone(),
                 Node::new_with_op(Some(t), NodeType::Mod, node, self.assign()))
+        } else if let Some(t) = self.consume_str("<<=") {
+            node = Node::new_with_op(
+                Some(t.clone()), NodeType::Assign, node.clone(),
+                Node::new_with_op(Some(t), NodeType::BitLeft, node, self.assign()))
+        } else if let Some(t) = self.consume_str(">>=") {
+            node = Node::new_with_op(
+                Some(t.clone()), NodeType::Assign, node.clone(),
+                Node::new_with_op(Some(t), NodeType::BitRight, node, self.assign()))
+        } else if let Some(t) = self.consume_str("&=") {
+            node = Node::new_with_op(
+                Some(t.clone()), NodeType::Assign, node.clone(),
+                Node::new_with_op(Some(t), NodeType::BitAnd, node, self.assign()))
+        } else if let Some(t) = self.consume_str("^=") {
+            node = Node::new_with_op(
+                Some(t.clone()), NodeType::Assign, node.clone(),
+                Node::new_with_op(Some(t), NodeType::BitXor, node, self.assign()))
+        } else if let Some(t) = self.consume_str("|=") {
+            node = Node::new_with_op(
+                Some(t.clone()), NodeType::Assign, node.clone(),
+                Node::new_with_op(Some(t), NodeType::BitOr, node, self.assign()))
         }
         node
     }
