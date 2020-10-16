@@ -296,6 +296,11 @@ int test36() {
     return x;
 }
 
+int test37() {
+    int c[123] = {1, 3, 5};
+    return *(2+c);
+}
+
 int main() {
     assert(104, add6(Add(3, 8), 2, 3, 4, 5, 6));
     assert(12, test01());
@@ -336,5 +341,6 @@ int main() {
     assert(120, test34());
     assert(32, test35());
     assert(15, test36());
+    assert(5, test37());
     return 0;
-}//
+}

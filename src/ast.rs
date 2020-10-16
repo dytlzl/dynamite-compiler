@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use crate::ctype::Type;
 use crate::func::Func;
 use crate::global::{GlobalVariable, GlobalVariableData};
-use std::mem::swap;
 
 pub struct ASTBuilder<'a> {
     code: &'a str,
@@ -742,20 +741,8 @@ impl<'a> ASTBuilder<'a> {
         };
         while let Some(b_token) = self.consume_str("[") {
             // Subscript array
-            let mut rhs = self.expr();
+            node = Node::new_with_op(Some(b_token.clone()), NodeType::Add,node, self.expr());
             self.expect("]");
-            if let Some(Type::Arr(..)) = node.resolve_type() {} else {
-                if let Some(Type::Arr(..)) = rhs.resolve_type() {
-                    swap(&mut node, &mut rhs);
-                }
-            }
-            node = Node {
-                token: Some(b_token.clone()),
-                nt: NodeType::Add,
-                lhs: Some(Box::new(node)),
-                rhs: Some(Box::new(rhs)),
-                ..Node::default()
-            };
             node = Node {
                 token: Some(b_token.clone()),
                 nt: NodeType::Deref,
