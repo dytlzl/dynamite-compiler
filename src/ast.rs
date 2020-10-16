@@ -607,6 +607,23 @@ impl<'a> ASTBuilder<'a> {
                 ..Node::default()
             };
         }
+        if let Some(t) = self.consume_str("~") {
+            return Node {
+                token: Some(t),
+                nt: NodeType::BitNot,
+                lhs: Some(Box::new(self.unary())),
+                ..Node::default()
+            };
+        }
+        if let Some(t) = self.consume_str("!") {
+            return Node {
+                token: Some(t),
+                nt: NodeType::Eq,
+                lhs: Some(Box::new(self.unary())),
+                rhs: Some(Box::new(Node::new_with_num(None, 0))),
+                ..Node::default()
+            };
+        }
         self.prim()
     }
     fn prim(&mut self) -> Node {

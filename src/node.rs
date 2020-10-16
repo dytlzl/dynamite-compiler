@@ -20,6 +20,7 @@ pub enum NodeType {
     BitAnd,
     BitXor,
     BitOr,
+    BitNot,
     LogicalAnd,
     LogicalOr,
     Num,

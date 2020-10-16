@@ -312,6 +312,13 @@ impl<'a> AsmGenerator<'a> {
                 self.inst1(PUSH, RAX);
                 return;
             }
+            NodeType::BitNot => {
+                self.gen_with_node(node.lhs.as_ref().unwrap());
+                self.inst1(POP, RAX);
+                self.inst1(NOT, RAX);
+                self.inst1(PUSH, RAX);
+                return;
+            }
             NodeType::LogicalAnd => {
                 let branch_num = self.new_branch_num();
                 self.gen_with_node(node.lhs.as_ref().unwrap());
