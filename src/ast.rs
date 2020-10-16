@@ -777,6 +777,12 @@ impl<'a> ASTBuilder<'a> {
                     lhs: Some(Box::new(node)),
                     ..Node::default()
                 }
+            } else if let Some(token) = self.attempt_reserved("++") {
+                // Suffix increment
+                node = Node::new_with_op_and_lhs(Some(token), NodeType::SuffixIncr, node);
+            } else if let Some(token) = self.attempt_reserved("--") {
+                // Suffix decrement
+                node = Node::new_with_op_and_lhs(Some(token), NodeType::SuffixDecr, node);
             } else {
                 return node;
             }

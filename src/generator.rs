@@ -343,6 +343,30 @@ impl<'a> AsmGenerator<'a> {
                 self.inst1(PUSH, RAX);
                 return;
             }
+            NodeType::SuffixIncr | NodeType::SuffixDecr => {
+                self.gen_addr(node.lhs.as_ref().unwrap());
+                self.inst1(POP, RAX);
+                self.inst2(MOV, RDI, 1);
+                if let Some(t) = node.lhs.as_ref().unwrap().dest_type() {
+                    self.inst2(IMUL, RDI, t.size_of());
+                }
+                self.inst2(MOV, RDX, RAX);
+                self.deref_rax(node.lhs.as_ref().unwrap());
+                let op = if let NodeType::SuffixIncr = node.nt { ADD } else { SUB };
+                match node.lhs.as_ref().unwrap().resolve_type() {
+                    Some(Type::Char) => {
+                        self.inst2(op, Ptr(RDX, 1), DIL);
+                    }
+                    Some(Type::Int) => {
+                        self.inst2(op, Ptr(RDX, 4), EDI);
+                    }
+                    _ => {
+                        self.inst2(op, Ptr(RDX, 8), RDI);
+                    }
+                }
+                self.inst1(PUSH, RAX);
+                return;
+            }
             _ => {}
         }
         self.gen_with_node(node.rhs.as_ref().unwrap());

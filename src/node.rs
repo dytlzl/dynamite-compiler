@@ -35,6 +35,8 @@ pub enum NodeType {
     Addr,
     Deref,
     DefVar,
+    SuffixIncr,
+    SuffixDecr,
 }
 
 impl Default for NodeType {
