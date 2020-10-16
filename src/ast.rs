@@ -653,6 +653,18 @@ impl<'a> ASTBuilder<'a> {
                 ..Node::default()
             };
         }
+        if let Some(t) = self.consume_str("++") {
+            let node = self.unary();
+            return Node::new_with_op(
+                Some(t.clone()), NodeType::Assign, node.clone(),
+                Node::new_with_op(Some(t), NodeType::Add, node, Node::new_with_num(None, 1)));
+        }
+        if let Some(t) = self.consume_str("--") {
+            let node = self.unary();
+            return Node::new_with_op(
+                Some(t.clone()), NodeType::Assign, node.clone(),
+                Node::new_with_op(Some(t), NodeType::Sub, node, Node::new_with_num(None, 1)));
+        }
         self.prim()
     }
     fn prim(&mut self) -> Node {

@@ -4,10 +4,10 @@ use std::collections::{HashSet, HashMap};
 
 pub const RESERVED_WORDS: [&str; 7] = ["return", "if", "else", "while", "for", "break", "sizeof"];
 pub const TYPES: [&str; 2] = ["int", "char"];
-pub const RESERVED_SYMBOLS: [&str; 44] = [
+pub const RESERVED_SYMBOLS: [&str; 46] = [
     "=", "+", "-", "*", "/", "%", "<", ">", "==", "!=", "+=", "-=", "*=", "/=", "%=", "<=", ">=",
     "&", "^", "|", "&&", "||", "<<", ">>", "{", "}", "(", ")", "[", "]", ",", ";", "/*", "//", "\"",
-    "!", "~", "?", ":", "<<=", ">>=", "&=", "^=", "|=",
+    "!", "~", "?", ":", "<<=", ">>=", "&=", "^=", "|=", "++", "--",
 ];
 
 pub fn close_symbol(s: &str) -> Option<&str> {

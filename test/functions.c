@@ -301,6 +301,13 @@ int test37() {
     return *(2+c);
 }
 
+int test38() {
+    int a = 3;
+    int b[3] = {4, 5, 6};
+    int *c = b;
+    return *++c*--a;
+}
+
 int main() {
     assert(104, add6(Add(3, 8), 2, 3, 4, 5, 6));
     assert(12, test01());
@@ -342,5 +349,6 @@ int main() {
     assert(32, test35());
     assert(15, test36());
     assert(5, test37());
+    assert(10, test38());
     return 0;
 }
