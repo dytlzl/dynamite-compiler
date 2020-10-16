@@ -299,6 +299,19 @@ impl<'a> AsmGenerator<'a> {
                 self.inst1(PUSH, RDI);
                 return;
             }
+            NodeType::BitLeft | NodeType::BitRight => {
+                self.gen_with_node(node.rhs.as_ref().unwrap());
+                self.gen_with_node(node.lhs.as_ref().unwrap());
+                self.inst1(POP, RAX);
+                self.inst1(POP, RCX);
+                self.inst2(match node.nt {
+                    NodeType::BitLeft => SHL,
+                    NodeType::BitRight => SAR,
+                    _ => { unreachable!() }
+                }, RAX, CL);
+                self.inst1(PUSH, RAX);
+                return;
+            }
             NodeType::LogicalAnd => {
                 let branch_num = self.new_branch_num();
                 self.gen_with_node(node.lhs.as_ref().unwrap());

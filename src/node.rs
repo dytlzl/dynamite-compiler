@@ -15,6 +15,8 @@ pub enum NodeType {
     Ne,
     Lt,
     Le,
+    BitLeft,
+    BitRight,
     BitAnd,
     BitXor,
     BitOr,
@@ -57,7 +59,7 @@ pub struct Node {
     // for "for" statement
     pub ini: Option<Box<Node>>,
     pub upd: Option<Box<Node>>,
-    // for block, definition of local variables, logical conjunction and logical disjunction
+    // for block, definition of local variables
     pub children: Vec<Node>,
     // flag of global variables
     pub global_name: String,

@@ -4,9 +4,9 @@ use std::collections::{HashSet, HashMap};
 
 pub const RESERVED_WORDS: [&str; 7] = ["return", "if", "else", "while", "for", "break", "sizeof"];
 pub const TYPES: [&str; 2] = ["int", "char"];
-pub const RESERVED_SYMBOLS: [&str; 33] = [
+pub const RESERVED_SYMBOLS: [&str; 35] = [
     "=", "+", "-", "*", "/", "%", "<", ">", "==", "!=", "+=", "-=", "*=", "/=", "%=", "<=", ">=",
-    "&", "^", "|", "&&", "||", "{", "}", "(", ")", "[", "]", ",", ";", "/*", "//", "\""
+    "&", "^", "|", "&&", "||", "<<", ">>", "{", "}", "(", ")", "[", "]", ",", ";", "/*", "//", "\""
 ];
 
 pub fn close_symbol(s: &str) -> Option<&str> {
@@ -207,7 +207,7 @@ impl Trie {
         }
         let offset = self.double_array[index].1;
         if index + offset + END_SYMBOL > self.double_array.len() {
-            self.double_array.extend(std::iter::repeat((0, 0)).take(index +offset+END_SYMBOL*2-self.double_array.len()))
+            self.double_array.extend(std::iter::repeat((0, 0)).take(index +offset+END_SYMBOL*3-self.double_array.len()))
         }
         for (&c_index, _) in &dict.children {
             self.double_array[index + offset + c_index].0 = index;

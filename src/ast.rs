@@ -526,16 +526,28 @@ impl<'a> ASTBuilder<'a> {
         }
     }
     fn relational(&mut self) -> Node {
-        let mut node = self.add();
+        let mut node = self.bit_shift();
         loop {
             if let Some(t) = self.consume_str("<") {
-                node = Node::new_with_op(Some(t), NodeType::Lt, node, self.add())
+                node = Node::new_with_op(Some(t), NodeType::Lt, node, self.bit_shift())
             } else if let Some(t) = self.consume_str("<=") {
-                node = Node::new_with_op(Some(t), NodeType::Le, node, self.add())
+                node = Node::new_with_op(Some(t), NodeType::Le, node, self.bit_shift())
             } else if let Some(t) = self.consume_str(">") {
-                node = Node::new_with_op(Some(t), NodeType::Lt, self.add(), node)
+                node = Node::new_with_op(Some(t), NodeType::Lt, self.bit_shift(), node)
             } else if let Some(t) = self.consume_str(">=") {
-                node = Node::new_with_op(Some(t), NodeType::Le, self.add(), node)
+                node = Node::new_with_op(Some(t), NodeType::Le, self.bit_shift(), node)
+            } else {
+                return node;
+            }
+        }
+    }
+    fn bit_shift(&mut self) -> Node {
+        let mut node = self.add();
+        loop {
+            if let Some(t) = self.consume_str("<<") {
+                node = Node::new_with_op(Some(t), NodeType::BitLeft, node, self.add())
+            } else if let Some(t) = self.consume_str(">>") {
+                node = Node::new_with_op(Some(t), NodeType::BitRight, node, self.add())
             } else {
                 return node;
             }
