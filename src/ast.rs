@@ -32,24 +32,21 @@ impl<'a> ASTBuilder<'a> {
         builder.functions.insert(
             String::from("printf"),
             Func {
-                arg_types: vec![Type::Ptr(Box::new(Type::Char))],
-                return_type: Type::Int,
+                cty: Type::Func(vec![], Box::new(Type::Int)),
                 ..Func::default()
             },
         );
         builder.functions.insert(
             String::from("puts"),
             Func {
-                arg_types: vec![Type::Ptr(Box::new(Type::Char))],
-                return_type: Type::Int,
+                cty: Type::Func(vec![], Box::new(Type::Int)),
                 ..Func::default()
             },
         );
         builder.functions.insert(
             String::from("putchar"),
             Func {
-                arg_types: vec![Type::Char],
-                return_type: Type::Int,
+                cty: Type::Func(vec![], Box::new(Type::Int)),
                 ..Func::default()
             },
         );
@@ -57,14 +54,13 @@ impl<'a> ASTBuilder<'a> {
             String::from("exit"),
             Func {
                 body: None,
-                arg_types: vec![Type::Int],
-                return_type: Type::Int,
+                cty: Type::Func(vec![], Box::new(Type::Int)),
                 ..Func::default()
             },
         );
         builder
     }
-    fn consume_str(&mut self, s_value: &str) -> Option<Token> {
+    fn attempt_reserved(&mut self, s_value: &str) -> Option<Token> {
         if let TokenType::Reserved = self.tokens[self.cur].tt {
             if self.tokens[self.cur].s_value == s_value {
                 self.cur += 1;
@@ -73,7 +69,7 @@ impl<'a> ASTBuilder<'a> {
         }
         None
     }
-    fn consume_ident(&mut self) -> Option<Token> {
+    fn attempt_ident(&mut self) -> Option<Token> {
         if let TokenType::Ident = self.tokens[self.cur].tt {
             self.cur += 1;
             return Some(self.tokens[self.cur - 1].clone());
@@ -81,7 +77,7 @@ impl<'a> ASTBuilder<'a> {
             None
         }
     }
-    fn expect(&mut self, s_value: &str) -> Token {
+    fn expect_reserved(&mut self, s_value: &str) -> Token {
         if let TokenType::Reserved = self.tokens[self.cur].tt {
             if self.tokens[self.cur].s_value == s_value {
                 self.cur += 1;
@@ -100,7 +96,7 @@ impl<'a> ASTBuilder<'a> {
         self.cur += 1;
         self.tokens[self.cur - 1].clone()
     }
-    fn consume(&mut self, tt: TokenType) -> Option<Token> {
+    fn attempt(&mut self, tt: TokenType) -> Option<Token> {
         if tt == self.tokens[self.cur].tt {
             self.cur += 1;
             Some(self.tokens[self.cur - 1].clone())
@@ -118,14 +114,14 @@ impl<'a> ASTBuilder<'a> {
     }
     fn expect_ident_with_type(&mut self, ty: Type) -> (Token, Type) {
         let mut ty = ty.clone();
-        while let Some(_) = self.consume_str("*") {
+        while let Some(_) = self.attempt_reserved("*") {
             ty = Type::Ptr(Box::new(ty));
         }
-        if let Some(t) = self.consume_ident() {
-            while let Some(_) = self.consume_str("[") {
+        if let Some(t) = self.attempt_ident() {
+            while let Some(_) = self.attempt_reserved("[") {
                 let n = self.expect_number();
                 ty = Type::Arr(Box::new(ty), n.i_value);
-                self.expect("]");
+                self.expect_reserved("]");
             }
             (t, ty)
         } else {
@@ -148,17 +144,17 @@ impl<'a> ASTBuilder<'a> {
             ..Node::default()
         }
     }
-    fn consume_type(&mut self) -> Option<Type> {
-        if let Some(_) = self.consume_str("int") {
+    fn attempt_type(&mut self) -> Option<Type> {
+        if let Some(_) = self.attempt_reserved("int") {
             Some(Type::Int)
-        } else if let Some(_) = self.consume_str("char") {
+        } else if let Some(_) = self.attempt_reserved("char") {
             Some(Type::Char)
         } else {
             None
         }
     }
     fn expect_type(&mut self) -> Type {
-        if let Some(ty) = self.consume_type() {
+        if let Some(ty) = self.attempt_type() {
             ty
         } else {
             error_at(self.code, self.tokens[self.cur].pos, "type expected");
@@ -171,15 +167,15 @@ impl<'a> ASTBuilder<'a> {
         let ty = self.expect_type();
         let cur_to_back = self.cur;
         let (t, return_type) = self.expect_ident_with_type(ty.clone());
-        if let Some(_) = self.consume_str("(") { // function
+        if let Some(_) = self.attempt_reserved("(") { // function
             let mut args: Vec<Node> = Vec::new();
-            if let None = self.consume_str(")") {
+            if let None = self.attempt_reserved(")") {
                 loop {
                     let ty = self.expect_type();
                     args.push(self.new_local_variable(ty));
-                    if let None = self.consume_str(",") { break; }
+                    if let None = self.attempt_reserved(",") { break; }
                 }
-                self.expect(")");
+                self.expect_reserved(")");
             }
             if args.len() >= 7 {
                 error_at(self.code, t.pos, "count of args must be less than 7")
@@ -190,8 +186,9 @@ impl<'a> ASTBuilder<'a> {
             self.functions.insert(
                 t.s_value.clone(),
                 Func {
-                    arg_types: arg_types.iter().map(|ty| ty.clone()).collect(),
-                    return_type: return_type.clone(),
+                    cty: Type::Func(
+                        arg_types.clone(),
+                        Box::new(return_type.clone())),
                     token: Some(t.clone()),
                     ..Func::default()
                 });
@@ -200,8 +197,9 @@ impl<'a> ASTBuilder<'a> {
                 t.s_value.clone(),
                 Func {
                     body,
-                    arg_types,
-                    return_type,
+                    cty: Type::Func(
+                        arg_types.clone(),
+                        Box::new(return_type.clone())),
                     offset_size: self.offset_size,
                     token: Some(t.clone()),
                     args,
@@ -210,7 +208,7 @@ impl<'a> ASTBuilder<'a> {
             self.cur = cur_to_back; // back the cursor
             loop {
                 let (t, ty) = self.expect_ident_with_type(ty.clone());
-                let data = if let Some(_) = self.consume_str("=") {
+                let data = if let Some(_) = self.attempt_reserved("=") {
                     Some(self.global_data())
                 } else {
                     None
@@ -218,25 +216,25 @@ impl<'a> ASTBuilder<'a> {
                 self.global_variables.insert(
                     t.s_value.clone(),
                     GlobalVariable { ty: ty.clone(), data });
-                if let None = self.consume_str(",") {
+                if let None = self.attempt_reserved(",") {
                     break;
                 }
             }
-            self.expect(";");
+            self.expect_reserved(";");
         }
     }
     fn global_data(&mut self) -> GlobalVariableData {
-        if let Some(_) = self.consume_str("{") {
+        if let Some(_) = self.attempt_reserved("{") {
             let mut vec = Vec::new();
-            if let None = self.consume_str("}") {
+            if let None = self.attempt_reserved("}") {
                 loop {
                     vec.push(self.global_data());
-                    if let None = self.consume_str(",") { break; }
+                    if let None = self.attempt_reserved(",") { break; }
                 }
-                self.expect("}");
+                self.expect_reserved("}");
             }
             GlobalVariableData::Arr(vec)
-        } else if let Some(t) = self.consume(TokenType::Str) {
+        } else if let Some(t) = self.attempt(TokenType::Str) {
             GlobalVariableData::Elem(self.new_string_literal(&t.s_value))
         } else {
             let equality = self.equality();
@@ -289,65 +287,65 @@ impl<'a> ASTBuilder<'a> {
         }
     }
     fn stmt(&mut self) -> Node {
-        if let Some(t) = self.consume_str("if") {
-            self.expect("(");
+        if let Some(t) = self.attempt_reserved("if") {
+            self.expect_reserved("(");
             let cond = self.expr();
-            self.expect(")");
+            self.expect_reserved(")");
             let then = self.stmt();
             let mut els: Option<Node> = None;
-            if let Some(_) = self.consume_str("else") {
+            if let Some(_) = self.attempt_reserved("else") {
                 els = Some(self.stmt());
             }
             return Node::new_if_node(Some(t), cond, then, els);
         }
-        if let Some(t) = self.consume_str("while") {
-            self.expect("(");
+        if let Some(t) = self.attempt_reserved("while") {
+            self.expect_reserved("(");
             let cond = self.expr();
-            self.expect(")");
+            self.expect_reserved(")");
             return Node::new_while_node(Some(t), cond, self.stmt());
         }
-        if let Some(t) = self.consume_str("for") {
-            self.expect("(");
+        if let Some(t) = self.attempt_reserved("for") {
+            self.expect_reserved("(");
             let mut ini: Option<Node> = None;
             let mut cond: Option<Node> = None;
             let mut upd: Option<Node> = None;
-            if let None = self.consume_str(";") {
+            if let None = self.attempt_reserved(";") {
                 ini = Some(
-                    if let Some(ty) = self.consume_type() {
+                    if let Some(ty) = self.attempt_type() {
                         self.local_variable_definition(ty)
                     } else {
                         self.expr()
                     }
                 );
-                self.expect(";");
+                self.expect_reserved(";");
             }
-            if let None = self.consume_str(";") {
+            if let None = self.attempt_reserved(";") {
                 cond = Some(self.expr());
-                self.expect(";");
+                self.expect_reserved(";");
             }
-            if let None = self.consume_str(")") {
+            if let None = self.attempt_reserved(")") {
                 upd = Some(self.expr());
-                self.expect(")");
+                self.expect_reserved(")");
             }
             return Node::new_for_node(Some(t), ini, cond, upd, self.stmt());
         }
         if let Some(node) = self.consume_block() {
             return node;
         }
-        let node = if let Some(ty) = self.consume_type() {
+        let node = if let Some(ty) = self.attempt_type() {
             self.local_variable_definition(ty)
-        } else if let Some(t) = self.consume_str("break") {
+        } else if let Some(t) = self.attempt_reserved("break") {
             Node {
                 token: Some(t),
                 nt: NodeType::Break,
                 ..Node::default()
             }
-        } else if let Some(t) = self.consume_str("return") {
+        } else if let Some(t) = self.attempt_reserved("return") {
             Node::new_with_op_and_lhs(Some(t), NodeType::Return, self.expr())
         } else {
             self.expr()
         };
-        self.expect(";");
+        self.expect_reserved(";");
         node
     }
 
@@ -355,11 +353,11 @@ impl<'a> ASTBuilder<'a> {
         let mut vec = Vec::new();
         loop {
             let node = self.new_local_variable(ty.clone());
-            if let Some(token) = self.consume_str("=") {
+            if let Some(token) = self.attempt_reserved("=") {
                 // if initializer element exists, push into AST
                 vec.push(self.local_variable_initialization(&node, &token));
             }
-            if let None = self.consume_str(",") {
+            if let None = self.attempt_reserved(",") {
                 break;
             }
         }
@@ -371,9 +369,9 @@ impl<'a> ASTBuilder<'a> {
     }
 
     fn local_variable_initialization(&mut self, node: &Node, assign_token: &Token) -> Node {
-        if let Some(b_token) = self.consume_str("{") {
+        if let Some(b_token) = self.attempt_reserved("{") {
             let mut vec = Vec::new();
-            if let None = self.consume_str("}") {
+            if let None = self.attempt_reserved("}") {
                 let mut index = 0;
                 loop {
                     let rhs = Node::new_with_num(None, index);
@@ -391,10 +389,10 @@ impl<'a> ASTBuilder<'a> {
                         ..Node::default()
                     };
                     vec.push(self.local_variable_initialization(&node, &assign_token));
-                    if let None = self.consume_str(",") { break; }
+                    if let None = self.attempt_reserved(",") { break; }
                     index += 1;
                 }
-                self.expect("}");
+                self.expect_reserved("}");
             }
             Node {
                 token: Some(assign_token.clone()),
@@ -414,9 +412,9 @@ impl<'a> ASTBuilder<'a> {
     }
 
     pub fn consume_block(&mut self) -> Option<Node> {
-        if let Some(t) = self.consume_str("{") {
+        if let Some(t) = self.attempt_reserved("{") {
             let mut children: Vec<Node> = Vec::new();
-            while let None = self.consume_str("}") {
+            while let None = self.attempt_reserved("}") {
                 children.push(self.stmt());
             }
             Some(
@@ -436,46 +434,46 @@ impl<'a> ASTBuilder<'a> {
     }
     fn assign(&mut self) -> Node {
         let mut node = self.ternary();
-        if let Some(t) = self.consume_str("=") {
+        if let Some(t) = self.attempt_reserved("=") {
             // left-associative => while, right-associative => recursive function
             node = Node::new_with_op(Some(t), NodeType::Assign, node, self.assign())
-        } else if let Some(t) = self.consume_str("+=") {
+        } else if let Some(t) = self.attempt_reserved("+=") {
             node = Node::new_with_op(
                 Some(t.clone()), NodeType::Assign, node.clone(),
                 Node::new_with_op(Some(t), NodeType::Add, node, self.assign()))
-        } else if let Some(t) = self.consume_str("-=") {
+        } else if let Some(t) = self.attempt_reserved("-=") {
             node = Node::new_with_op(
                 Some(t.clone()), NodeType::Assign, node.clone(),
                 Node::new_with_op(Some(t), NodeType::Sub, node, self.assign()))
-        } else if let Some(t) = self.consume_str("*=") {
+        } else if let Some(t) = self.attempt_reserved("*=") {
             node = Node::new_with_op(
                 Some(t.clone()), NodeType::Assign, node.clone(),
                 Node::new_with_op(Some(t), NodeType::Mul, node, self.assign()))
-        } else if let Some(t) = self.consume_str("/=") {
+        } else if let Some(t) = self.attempt_reserved("/=") {
             node = Node::new_with_op(
                 Some(t.clone()), NodeType::Assign, node.clone(),
                 Node::new_with_op(Some(t), NodeType::Div, node, self.assign()))
-        } else if let Some(t) = self.consume_str("%=") {
+        } else if let Some(t) = self.attempt_reserved("%=") {
             node = Node::new_with_op(
                 Some(t.clone()), NodeType::Assign, node.clone(),
                 Node::new_with_op(Some(t), NodeType::Mod, node, self.assign()))
-        } else if let Some(t) = self.consume_str("<<=") {
+        } else if let Some(t) = self.attempt_reserved("<<=") {
             node = Node::new_with_op(
                 Some(t.clone()), NodeType::Assign, node.clone(),
                 Node::new_with_op(Some(t), NodeType::BitLeft, node, self.assign()))
-        } else if let Some(t) = self.consume_str(">>=") {
+        } else if let Some(t) = self.attempt_reserved(">>=") {
             node = Node::new_with_op(
                 Some(t.clone()), NodeType::Assign, node.clone(),
                 Node::new_with_op(Some(t), NodeType::BitRight, node, self.assign()))
-        } else if let Some(t) = self.consume_str("&=") {
+        } else if let Some(t) = self.attempt_reserved("&=") {
             node = Node::new_with_op(
                 Some(t.clone()), NodeType::Assign, node.clone(),
                 Node::new_with_op(Some(t), NodeType::BitAnd, node, self.assign()))
-        } else if let Some(t) = self.consume_str("^=") {
+        } else if let Some(t) = self.attempt_reserved("^=") {
             node = Node::new_with_op(
                 Some(t.clone()), NodeType::Assign, node.clone(),
                 Node::new_with_op(Some(t), NodeType::BitXor, node, self.assign()))
-        } else if let Some(t) = self.consume_str("|=") {
+        } else if let Some(t) = self.attempt_reserved("|=") {
             node = Node::new_with_op(
                 Some(t.clone()), NodeType::Assign, node.clone(),
                 Node::new_with_op(Some(t), NodeType::BitOr, node, self.assign()))
@@ -484,18 +482,18 @@ impl<'a> ASTBuilder<'a> {
     }
     fn ternary(&mut self) -> Node {
         let node = self.logical_or();
-        if let Some(t) = self.consume_str("?") {
+        if let Some(t) = self.attempt_reserved("?") {
             let then = self.logical_or();
-            self.expect(":");
+            self.expect_reserved(":");
             let els = self.logical_or();
             return Node::new_if_node(Some(t), node, then, Some(els));
         }
-        return node
+        return node;
     }
     fn logical_or(&mut self) -> Node {
         let mut node = self.logical_and();
         loop {
-            if let Some(t) = self.consume_str("||") {
+            if let Some(t) = self.attempt_reserved("||") {
                 node = Node::new_with_op(Some(t), NodeType::LogicalOr, node, self.logical_and());
             } else {
                 return node;
@@ -505,7 +503,7 @@ impl<'a> ASTBuilder<'a> {
     fn logical_and(&mut self) -> Node {
         let mut node = self.bitwise_or();
         loop {
-            if let Some(t) = self.consume_str("&&") {
+            if let Some(t) = self.attempt_reserved("&&") {
                 node = Node::new_with_op(Some(t), NodeType::LogicalAnd, node, self.bitwise_or());
             } else {
                 return node;
@@ -515,7 +513,7 @@ impl<'a> ASTBuilder<'a> {
     fn bitwise_or(&mut self) -> Node {
         let mut node = self.bitwise_xor();
         loop {
-            if let Some(t) = self.consume_str("|") {
+            if let Some(t) = self.attempt_reserved("|") {
                 node = Node::new_with_op(Some(t), NodeType::BitOr, node, self.bitwise_xor())
             } else {
                 return node;
@@ -525,7 +523,7 @@ impl<'a> ASTBuilder<'a> {
     fn bitwise_xor(&mut self) -> Node {
         let mut node = self.bitwise_and();
         loop {
-            if let Some(t) = self.consume_str("^") {
+            if let Some(t) = self.attempt_reserved("^") {
                 node = Node::new_with_op(Some(t), NodeType::BitXor, node, self.bitwise_and())
             } else {
                 return node;
@@ -535,7 +533,7 @@ impl<'a> ASTBuilder<'a> {
     fn bitwise_and(&mut self) -> Node {
         let mut node = self.equality();
         loop {
-            if let Some(t) = self.consume_str("&") {
+            if let Some(t) = self.attempt_reserved("&") {
                 node = Node::new_with_op(Some(t), NodeType::BitAnd, node, self.equality())
             } else {
                 return node;
@@ -545,9 +543,9 @@ impl<'a> ASTBuilder<'a> {
     fn equality(&mut self) -> Node {
         let mut node = self.relational();
         loop {
-            if let Some(t) = self.consume_str("==") {
+            if let Some(t) = self.attempt_reserved("==") {
                 node = Node::new_with_op(Some(t), NodeType::Eq, node, self.relational())
-            } else if let Some(t) = self.consume_str("!=") {
+            } else if let Some(t) = self.attempt_reserved("!=") {
                 node = Node::new_with_op(Some(t), NodeType::Ne, node, self.relational())
             } else {
                 return node;
@@ -557,13 +555,13 @@ impl<'a> ASTBuilder<'a> {
     fn relational(&mut self) -> Node {
         let mut node = self.bit_shift();
         loop {
-            if let Some(t) = self.consume_str("<") {
+            if let Some(t) = self.attempt_reserved("<") {
                 node = Node::new_with_op(Some(t), NodeType::Lt, node, self.bit_shift())
-            } else if let Some(t) = self.consume_str("<=") {
+            } else if let Some(t) = self.attempt_reserved("<=") {
                 node = Node::new_with_op(Some(t), NodeType::Le, node, self.bit_shift())
-            } else if let Some(t) = self.consume_str(">") {
+            } else if let Some(t) = self.attempt_reserved(">") {
                 node = Node::new_with_op(Some(t), NodeType::Lt, self.bit_shift(), node)
-            } else if let Some(t) = self.consume_str(">=") {
+            } else if let Some(t) = self.attempt_reserved(">=") {
                 node = Node::new_with_op(Some(t), NodeType::Le, self.bit_shift(), node)
             } else {
                 return node;
@@ -573,9 +571,9 @@ impl<'a> ASTBuilder<'a> {
     fn bit_shift(&mut self) -> Node {
         let mut node = self.add();
         loop {
-            if let Some(t) = self.consume_str("<<") {
+            if let Some(t) = self.attempt_reserved("<<") {
                 node = Node::new_with_op(Some(t), NodeType::BitLeft, node, self.add())
-            } else if let Some(t) = self.consume_str(">>") {
+            } else if let Some(t) = self.attempt_reserved(">>") {
                 node = Node::new_with_op(Some(t), NodeType::BitRight, node, self.add())
             } else {
                 return node;
@@ -585,9 +583,9 @@ impl<'a> ASTBuilder<'a> {
     fn add(&mut self) -> Node {
         let mut node = self.mul();
         loop {
-            if let Some(t) = self.consume_str("+") {
+            if let Some(t) = self.attempt_reserved("+") {
                 node = Node::new_with_op(Some(t), NodeType::Add, node, self.mul())
-            } else if let Some(t) = self.consume_str("-") {
+            } else if let Some(t) = self.attempt_reserved("-") {
                 node = Node::new_with_op(Some(t), NodeType::Sub, node, self.mul())
             } else {
                 return node;
@@ -597,11 +595,11 @@ impl<'a> ASTBuilder<'a> {
     fn mul(&mut self) -> Node {
         let mut node = self.unary();
         loop {
-            if let Some(t) = self.consume_str("*") {
+            if let Some(t) = self.attempt_reserved("*") {
                 node = Node::new_with_op(Some(t), NodeType::Mul, node, self.unary())
-            } else if let Some(t) = self.consume_str("/") {
+            } else if let Some(t) = self.attempt_reserved("/") {
                 node = Node::new_with_op(Some(t), NodeType::Div, node, self.unary())
-            } else if let Some(t) = self.consume_str("%") {
+            } else if let Some(t) = self.attempt_reserved("%") {
                 node = Node::new_with_op(Some(t), NodeType::Mod, node, self.unary())
             } else {
                 return node;
@@ -609,7 +607,7 @@ impl<'a> ASTBuilder<'a> {
         }
     }
     fn unary(&mut self) -> Node {
-        if let Some(t) = self.consume_str("sizeof") {
+        if let Some(t) = self.attempt_reserved("sizeof") {
             return Node {
                 token: Some(t),
                 value: Some(self.unary().resolve_type().unwrap().size_of()),
@@ -617,10 +615,10 @@ impl<'a> ASTBuilder<'a> {
                 ..Node::default()
             };
         }
-        if let Some(_) = self.consume_str("+") {} else if let Some(t) = self.consume_str("-") {
+        if let Some(_) = self.attempt_reserved("+") {} else if let Some(t) = self.attempt_reserved("-") {
             return Node::new_with_op(Some(t), NodeType::Sub, Node::new_with_num(None, 0), self.prim());
         }
-        if let Some(t) = self.consume_str("&") {
+        if let Some(t) = self.attempt_reserved("&") {
             return Node {
                 token: Some(t),
                 nt: NodeType::Addr,
@@ -628,7 +626,7 @@ impl<'a> ASTBuilder<'a> {
                 ..Node::default()
             };
         }
-        if let Some(t) = self.consume_str("*") {
+        if let Some(t) = self.attempt_reserved("*") {
             return Node {
                 token: Some(t),
                 nt: NodeType::Deref,
@@ -636,7 +634,7 @@ impl<'a> ASTBuilder<'a> {
                 ..Node::default()
             };
         }
-        if let Some(t) = self.consume_str("~") {
+        if let Some(t) = self.attempt_reserved("~") {
             return Node {
                 token: Some(t),
                 nt: NodeType::BitNot,
@@ -644,7 +642,7 @@ impl<'a> ASTBuilder<'a> {
                 ..Node::default()
             };
         }
-        if let Some(t) = self.consume_str("!") {
+        if let Some(t) = self.attempt_reserved("!") {
             return Node {
                 token: Some(t),
                 nt: NodeType::Eq,
@@ -653,13 +651,13 @@ impl<'a> ASTBuilder<'a> {
                 ..Node::default()
             };
         }
-        if let Some(t) = self.consume_str("++") {
+        if let Some(t) = self.attempt_reserved("++") {
             let node = self.unary();
             return Node::new_with_op(
                 Some(t.clone()), NodeType::Assign, node.clone(),
                 Node::new_with_op(Some(t), NodeType::Add, node, Node::new_with_num(None, 1)));
         }
-        if let Some(t) = self.consume_str("--") {
+        if let Some(t) = self.attempt_reserved("--") {
             let node = self.unary();
             return Node::new_with_op(
                 Some(t.clone()), NodeType::Assign, node.clone(),
@@ -668,65 +666,11 @@ impl<'a> ASTBuilder<'a> {
         self.prim()
     }
     fn prim(&mut self) -> Node {
-        let mut node = if let Some(_) = self.consume_str("(") {
+        let mut node = if let Some(_) = self.attempt_reserved("(") {
             let node = self.expr();
-            self.expect(")");
+            self.expect_reserved(")");
             node
-        } else if let Some(t) = self.consume_ident() {
-            if let Some(_) = self.consume_str("(") {
-                if !self.functions.contains_key(&t.s_value) {
-                    error_at(self.code, t.pos, "undefined function");
-                }
-                let return_type =
-                    self.functions.get(&t.s_value).unwrap().return_type.clone();
-                let mut args: Vec<Node> = Vec::new();
-                if let None = self.consume_str(")") {
-                    args.push(self.expr());
-                    while let None = self.consume_str(")") {
-                        self.expect(",");
-                        args.push(self.expr());
-                    }
-                    if args.len() >= 7 {
-                        error_at(self.code, t.pos, "count of args must be less than 7")
-                    }
-                    // conforming to cdecl
-                    // arguments are pushed onto the stack, from right to left
-                    args.reverse();
-                }
-                let s_value = t.s_value.clone();
-                Node {
-                    token: Some(t),
-                    nt: NodeType::CallFunc,
-                    global_name: String::from(s_value),
-                    cty: Some(return_type),
-                    args,
-                    ..Node::default()
-                }
-            } else {
-                if self.offset_map.contains_key(&t.s_value) {
-                    let (ty, offset) = self.offset_map.get(&t.s_value).unwrap();
-                    Node {
-                        token: Some(t.clone()),
-                        nt: NodeType::LocalVar,
-                        cty: Some(ty.clone()),
-                        offset: Some(offset.clone()),
-                        ..Node::default()
-                    }
-                } else if self.global_variables.contains_key(&t.s_value) {
-                    let ty = self.global_variables.get(&t.s_value).unwrap().ty.clone();
-                    Node {
-                        token: Some(t.clone()),
-                        nt: NodeType::GlobalVar,
-                        cty: Some(ty.clone()),
-                        global_name: t.s_value.clone(),
-                        ..Node::default()
-                    }
-                } else {
-                    error_at(self.code, t.pos, "undefined variable");
-                    unreachable!();
-                }
-            }
-        } else if let Some(t) = self.consume(TokenType::Str) {
+        } else if let Some(t) = self.attempt(TokenType::Str) {
             // String literal
             let node = Node {
                 token: Some(t.clone()),
@@ -741,8 +685,8 @@ impl<'a> ASTBuilder<'a> {
                 lhs: Some(Box::new(node)),
                 ..Node::default()
             }
-        } else {
-            let t = self.expect_number();
+        } else if let Some(t) = self.attempt(TokenType::Num) {
+            // Number literal
             Node {
                 token: Some(t.clone()),
                 nt: NodeType::Num,
@@ -750,19 +694,93 @@ impl<'a> ASTBuilder<'a> {
                 cty: Some(Type::Int),
                 ..Node::default()
             }
+        } else if let Some(t) = self.attempt_ident() {
+            if self.offset_map.contains_key(&t.s_value) {
+                // Local variables
+                let (ty, offset) = self.offset_map.get(&t.s_value).unwrap();
+                Node {
+                    token: Some(t.clone()),
+                    nt: NodeType::LocalVar,
+                    cty: Some(ty.clone()),
+                    offset: Some(offset.clone()),
+                    ..Node::default()
+                }
+            } else if self.global_variables.contains_key(&t.s_value) {
+                // Global variables
+                let ty = self.global_variables.get(&t.s_value).unwrap().ty.clone();
+                Node {
+                    token: Some(t.clone()),
+                    nt: NodeType::GlobalVar,
+                    cty: Some(ty.clone()),
+                    global_name: t.s_value.clone(),
+                    ..Node::default()
+                }
+            } else if self.functions.contains_key(&t.s_value) {
+                // Functions
+                let ty = self.functions.get(&t.s_value).unwrap().cty.clone();
+                Node {
+                    token: Some(t.clone()),
+                    nt: NodeType::GlobalVar,
+                    cty: Some(ty.clone()),
+                    global_name: t.s_value.clone(),
+                    ..Node::default()
+                }
+            } else {
+                error_at(self.code, t.pos, "undefined variable");
+                unreachable!();
+            }
+        } else {
+            error_at(self.code, self.tokens[self.cur].pos, "unexpected token");
+            unreachable!();
         };
-        while let Some(b_token) = self.consume_str("[") {
-            // Subscript array
-            node = Node::new_with_op(Some(b_token.clone()), NodeType::Add,node, self.expr());
-            self.expect("]");
-            node = Node {
-                token: Some(b_token.clone()),
-                nt: NodeType::Deref,
-                lhs: Some(Box::new(node)),
-                ..Node::default()
+        loop {
+            if let Some(_) = self.attempt_reserved("(") {
+                // Call function
+                let t = node.token.unwrap();
+                if !self.functions.contains_key(&t.s_value) {
+                    error_at(self.code, t.pos, "undefined function");
+                }
+                let return_type = if let Type::Func(_, return_type) =
+                &self.functions.get(&t.s_value).unwrap().cty {
+                    *return_type.clone()
+                } else { unreachable!() };
+                let mut args: Vec<Node> = Vec::new();
+                if let None = self.attempt_reserved(")") {
+                    args.push(self.expr());
+                    while let None = self.attempt_reserved(")") {
+                        self.expect_reserved(",");
+                        args.push(self.expr());
+                    }
+                    if args.len() >= 7 {
+                        error_at(self.code, t.pos, "count of args must be less than 7")
+                    }
+                    // conforming to cdecl
+                    // arguments are pushed onto the stack, from right to left
+                    args.reverse();
+                }
+                let s_value = t.s_value.clone();
+                node = Node {
+                    token: Some(t),
+                    nt: NodeType::CallFunc,
+                    global_name: String::from(s_value),
+                    cty: Some(return_type),
+                    args,
+                    ..Node::default()
+                }
+            } else if let Some(b_token) = self.attempt_reserved("[") {
+                // Subscript array
+                node = Node::new_with_op(Some(b_token.clone()), NodeType::Add, node, self.expr());
+                self.expect_reserved("]");
+                node = Node {
+                    token: Some(b_token.clone()),
+                    nt: NodeType::Deref,
+                    lhs: Some(Box::new(node)),
+                    ..Node::default()
+                }
+            } else {
+                return node;
             }
         }
-        node
     }
 
     fn new_string_literal(&mut self, s: &str) -> String {

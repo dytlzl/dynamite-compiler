@@ -3,7 +3,8 @@ pub enum Type {
     Int,
     Char,
     Ptr(Box<Type>),
-    Arr(Box<Type>, usize)
+    Arr(Box<Type>, usize),
+    Func(Vec<Type>, Box<Type>)
 }
 
 impl Type {
@@ -13,6 +14,7 @@ impl Type {
             Type::Char => 1,
             Type::Ptr(_) => 8,
             Type::Arr(t, s) => t.size_of()*s,
+            Type::Func(..) => 1,
         }
     }
     pub fn dest_type(&self) -> Option<Type> {
