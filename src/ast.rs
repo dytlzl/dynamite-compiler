@@ -436,7 +436,7 @@ impl<'a> ASTBuilder<'a> {
         self.assign()
     }
     fn assign(&mut self) -> Node {
-        let mut node = self.logical_or();
+        let mut node = self.ternary();
         if let Some(t) = self.consume_str("=") {
             // left-associative => while, right-associative => recursive function
             node = Node::new_with_op(Some(t), NodeType::Assign, node, self.assign())
@@ -462,6 +462,16 @@ impl<'a> ASTBuilder<'a> {
                 Node::new_with_op(Some(t), NodeType::Mod, node, self.assign()))
         }
         node
+    }
+    fn ternary(&mut self) -> Node {
+        let node = self.logical_or();
+        if let Some(t) = self.consume_str("?") {
+            let then = self.logical_or();
+            self.expect(":");
+            let els = self.logical_or();
+            return Node::new_if_node(Some(t), node, then, Some(els));
+        }
+        return node
     }
     fn logical_or(&mut self) -> Node {
         let mut node = self.logical_and();
