@@ -10,11 +10,17 @@ pub struct ASTBuilder<'a> {
     code: &'a str,
     tokens: &'a Vec<Token>,
     cur: usize,
-    pub offset_size: usize,
-    offset_map: HashMap<String, (Type, usize)>,
+    offset_size: usize,
+    scope_stack: Vec<HashMap<String, Identifier>>,
     pub functions: HashMap<String, Func>,
     pub global_variables: HashMap<String, GlobalVariable>,
     pub string_literals: Vec<String>,
+}
+
+pub enum Identifier {
+    TypeDef(Type),
+    Local(Type, usize),
+    Global(Type),
 }
 
 impl<'a> ASTBuilder<'a> {
@@ -24,40 +30,29 @@ impl<'a> ASTBuilder<'a> {
             tokens,
             cur: 0,
             offset_size: 0,
-            offset_map: HashMap::new(),
+            scope_stack: Vec::new(),
             functions: HashMap::new(),
             global_variables: HashMap::new(),
             string_literals: Vec::new(),
         };
-        builder.functions.insert(
+        let mut map = HashMap::new();
+        map.insert(
             String::from("printf"),
-            Func {
-                cty: Type::Func(vec![], Box::new(Type::Int)),
-                ..Func::default()
-            },
+            Identifier::Global(Type::Func(vec![], Box::new(Type::Int))),
         );
-        builder.functions.insert(
+        map.insert(
             String::from("puts"),
-            Func {
-                cty: Type::Func(vec![], Box::new(Type::Int)),
-                ..Func::default()
-            },
+            Identifier::Global(Type::Func(vec![], Box::new(Type::Int))),
         );
-        builder.functions.insert(
+        map.insert(
             String::from("putchar"),
-            Func {
-                cty: Type::Func(vec![], Box::new(Type::Int)),
-                ..Func::default()
-            },
+            Identifier::Global(Type::Func(vec![], Box::new(Type::Int))),
         );
-        builder.functions.insert(
+        map.insert(
             String::from("exit"),
-            Func {
-                body: None,
-                cty: Type::Func(vec![], Box::new(Type::Int)),
-                ..Func::default()
-            },
+            Identifier::Global(Type::Func(vec![], Box::new(Type::Int))),
         );
+        builder.scope_stack.push(map);
         builder
     }
     fn attempt_reserved(&mut self, s_value: &str) -> Option<Token> {
@@ -135,7 +130,10 @@ impl<'a> ASTBuilder<'a> {
         let segment_size =
             if let Some(dest) = ty.dest_type() { dest.size_of() } else { ty.size_of() };
         self.offset_size += segment_size - self.offset_size % segment_size;
-        self.offset_map.insert(t.s_value.clone(), (ty.clone(), self.offset_size));
+        if self.scope_stack.last().unwrap().contains_key(&t.s_value) {
+            error_at(self.code, t.pos, "invalid redeclaration");
+        }
+        self.scope_stack.last_mut().unwrap().insert(t.s_value.clone(), Identifier::Local(ty.clone(), self.offset_size));
         Node {
             token: Some(t),
             nt: NodeType::LocalVar,
@@ -162,12 +160,12 @@ impl<'a> ASTBuilder<'a> {
         }
     }
     fn global_definition(&mut self) {
-        self.offset_size = 0;
-        self.offset_map = HashMap::new();
         let ty = self.expect_type();
         let cur_to_back = self.cur;
         let (t, return_type) = self.expect_ident_with_type(ty.clone());
         if let Some(_) = self.attempt_reserved("(") { // function
+            self.offset_size = 0;
+            self.scope_stack.push(HashMap::new());
             let mut args: Vec<Node> = Vec::new();
             if let None = self.attempt_reserved(")") {
                 loop {
@@ -183,6 +181,12 @@ impl<'a> ASTBuilder<'a> {
             let arg_types: Vec<Type> = args.iter().map(
                 |arg| { arg.resolve_type().clone().unwrap() }
             ).collect();
+            self.scope_stack.first_mut().unwrap().insert(
+                t.s_value.clone(),
+                Identifier::Global(
+                    Type::Func(
+                        arg_types.clone(),
+                        Box::new(return_type.clone()))));
             self.functions.insert(
                 t.s_value.clone(),
                 Func {
@@ -193,6 +197,7 @@ impl<'a> ASTBuilder<'a> {
                     ..Func::default()
                 });
             let body = self.consume_block();
+            self.scope_stack.pop();
             self.functions.insert(
                 t.s_value.clone(),
                 Func {
@@ -213,6 +218,9 @@ impl<'a> ASTBuilder<'a> {
                 } else {
                     None
                 };
+                self.scope_stack.last_mut().unwrap().insert(
+                    t.s_value.clone(),
+                    Identifier::Global(ty.clone()));
                 self.global_variables.insert(
                     t.s_value.clone(),
                     GlobalVariable { ty: ty.clone(), data });
@@ -222,6 +230,14 @@ impl<'a> ASTBuilder<'a> {
             }
             self.expect_reserved(";");
         }
+    }
+    fn resolve_name(&mut self, s: &str) -> Option<&Identifier> {
+        for map in self.scope_stack.iter().rev() {
+            if map.contains_key(s) {
+                return map.get(s);
+            }
+        }
+        return None;
     }
     fn global_data(&mut self) -> GlobalVariableData {
         if let Some(_) = self.attempt_reserved("{") {
@@ -305,6 +321,7 @@ impl<'a> ASTBuilder<'a> {
             return Node::new_while_node(Some(t), cond, self.stmt());
         }
         if let Some(t) = self.attempt_reserved("for") {
+            self.scope_stack.push(HashMap::new());
             self.expect_reserved("(");
             let mut ini: Option<Node> = None;
             let mut cond: Option<Node> = None;
@@ -327,6 +344,7 @@ impl<'a> ASTBuilder<'a> {
                 upd = Some(self.expr());
                 self.expect_reserved(")");
             }
+            self.scope_stack.pop();
             return Node::new_for_node(Some(t), ini, cond, upd, self.stmt());
         }
         if let Some(node) = self.consume_block() {
@@ -413,10 +431,12 @@ impl<'a> ASTBuilder<'a> {
 
     pub fn consume_block(&mut self) -> Option<Node> {
         if let Some(t) = self.attempt_reserved("{") {
+            self.scope_stack.push(HashMap::new());
             let mut children: Vec<Node> = Vec::new();
             while let None = self.attempt_reserved("}") {
                 children.push(self.stmt());
             }
+            self.scope_stack.pop();
             Some(
                 Node {
                     token: Some(t),
@@ -695,35 +715,29 @@ impl<'a> ASTBuilder<'a> {
                 ..Node::default()
             }
         } else if let Some(t) = self.attempt_ident() {
-            if self.offset_map.contains_key(&t.s_value) {
-                // Local variables
-                let (ty, offset) = self.offset_map.get(&t.s_value).unwrap();
-                Node {
-                    token: Some(t.clone()),
-                    nt: NodeType::LocalVar,
-                    cty: Some(ty.clone()),
-                    offset: Some(offset.clone()),
-                    ..Node::default()
-                }
-            } else if self.global_variables.contains_key(&t.s_value) {
-                // Global variables
-                let ty = self.global_variables.get(&t.s_value).unwrap().ty.clone();
-                Node {
-                    token: Some(t.clone()),
-                    nt: NodeType::GlobalVar,
-                    cty: Some(ty.clone()),
-                    global_name: t.s_value.clone(),
-                    ..Node::default()
-                }
-            } else if self.functions.contains_key(&t.s_value) {
-                // Functions
-                let ty = self.functions.get(&t.s_value).unwrap().cty.clone();
-                Node {
-                    token: Some(t.clone()),
-                    nt: NodeType::GlobalVar,
-                    cty: Some(ty.clone()),
-                    global_name: t.s_value.clone(),
-                    ..Node::default()
+            if let Some(ident) = self.resolve_name(&t.s_value) {
+                match ident {
+                    Identifier::Local(ty, offset) => {
+                        Node {
+                            token: Some(t.clone()),
+                            nt: NodeType::LocalVar,
+                            cty: Some(ty.clone()),
+                            offset: Some(offset.clone()),
+                            ..Node::default()
+                        }
+                    }
+                    Identifier::Global(ty) => {
+                        Node {
+                            token: Some(t.clone()),
+                            nt: NodeType::GlobalVar,
+                            cty: Some(ty.clone()),
+                            global_name: t.s_value.clone(),
+                            ..Node::default()
+                        }
+                    }
+                    Identifier::TypeDef(..) => {
+                        unimplemented!()
+                    }
                 }
             } else {
                 error_at(self.code, t.pos, "undefined variable");
@@ -736,12 +750,9 @@ impl<'a> ASTBuilder<'a> {
         loop {
             if let Some(_) = self.attempt_reserved("(") {
                 // Call function
-                let t = node.token.unwrap();
-                if !self.functions.contains_key(&t.s_value) {
-                    error_at(self.code, t.pos, "undefined function");
-                }
-                let return_type = if let Type::Func(_, return_type) =
-                &self.functions.get(&t.s_value).unwrap().cty {
+                let t = node.token.clone().unwrap();
+                let return_type = if let Some(Type::Func(_, return_type)) =
+                node.resolve_type() {
                     *return_type.clone()
                 } else { unreachable!() };
                 let mut args: Vec<Node> = Vec::new();

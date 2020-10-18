@@ -1,6 +1,5 @@
 use crate::node::{Node, NodeType};
 use crate::error::{error, error_at};
-use std::collections::VecDeque;
 use crate::ast::{ASTBuilder};
 use crate::ctype::Type;
 use crate::func::Func;
@@ -12,10 +11,9 @@ use crate::instruction::InstOperand::{Ptr, PtrAdd, ElseFlag, EndFlag, BeginFlag}
 
 pub struct AsmGenerator<'a> {
     code: &'a str,
-    pub buf: Vec<u8>,
     target_os: Os,
     branch_count: usize,
-    loop_stack: VecDeque<usize>,
+    loop_stack: Vec<usize>,
     builder: &'a ASTBuilder<'a>,
     current_stack_size: usize,
     pub assemblies: Vec<Assembly>,
@@ -33,11 +31,10 @@ impl<'a> AsmGenerator<'a> {
     pub fn new(builder: &'a ASTBuilder<'a>, code: &'a str, target_os: Os) -> Self {
         Self {
             code,
-            buf: Vec::new(),
             target_os,
             builder,
             branch_count: 0,
-            loop_stack: VecDeque::new(),
+            loop_stack: Vec::new(),
             current_stack_size: 0,
             assemblies: Vec::new(),
         }
@@ -194,7 +191,7 @@ impl<'a> AsmGenerator<'a> {
             }
             NodeType::While => {
                 let branch_num = self.new_branch_num();
-                self.loop_stack.push_back(branch_num);
+                self.loop_stack.push(branch_num);
                 self.push_assembly(format!("{}:", BeginFlag(branch_num)));
                 self.reset_stack();
                 self.gen_with_node(node.cond.as_ref().unwrap());
@@ -204,12 +201,12 @@ impl<'a> AsmGenerator<'a> {
                 self.gen_with_node(node.then.as_ref().unwrap());
                 self.inst1(JMP, BeginFlag(branch_num));
                 self.push_assembly(format!("{}:", EndFlag(branch_num)));
-                self.loop_stack.pop_back();
+                self.loop_stack.pop();
                 return;
             }
             NodeType::For => {
                 let branch_num = self.new_branch_num();
-                self.loop_stack.push_back(branch_num);
+                self.loop_stack.push(branch_num);
                 if let Some(_) = node.ini {
                     self.gen_with_node(node.ini.as_ref().unwrap());
                     self.inst1(POP, RAX);
@@ -231,7 +228,7 @@ impl<'a> AsmGenerator<'a> {
                 }
                 self.inst1(JMP, BeginFlag(branch_num));
                 self.push_assembly(format!("{}:", EndFlag(branch_num)));
-                self.loop_stack.pop_back();
+                self.loop_stack.pop();
                 return;
             }
             NodeType::Block => {
@@ -239,7 +236,7 @@ impl<'a> AsmGenerator<'a> {
                 return;
             }
             NodeType::Break => {
-                if let Some(&branch_num) = self.loop_stack.back() {
+                if let Some(&branch_num) = self.loop_stack.last() {
                     self.inst1(JMP, EndFlag(branch_num.clone()));
                 } else {
                     error_at(self.code, node.token.as_ref().unwrap().pos, "unexpected break found");
