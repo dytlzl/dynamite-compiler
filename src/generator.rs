@@ -95,13 +95,13 @@ impl<'a> AsmGenerator<'a> {
                 }
                 self.push_assembly(format!("  .zero {}", children_ty.size_of() * rest_count));
             }
-            Type::Char => {
+            Type::I8 => {
                 self.push_assembly(format!(
                     "  .byte {}",
                     if let Some(GlobalVariableData::Elem(s)) = data { s } else { "0" }
                 ));
             }
-            Type::Int => {
+            Type::I32 => {
                 self.push_assembly(format!(
                     "  .4byte {}",
                     if let Some(GlobalVariableData::Elem(s)) = data { s } else { "0" }
@@ -283,10 +283,10 @@ impl<'a> AsmGenerator<'a> {
                 self.inst1(POP, RDI);
                 self.inst1(POP, RAX);
                 match node.lhs.as_ref().unwrap().resolve_type() {
-                    Some(Type::Char) => {
+                    Some(Type::I8) => {
                         self.inst2(MOV, Ptr(RAX, 1), DIL);
                     }
-                    Some(Type::Int) => {
+                    Some(Type::I32) => {
                         self.inst2(MOV, Ptr(RAX, 4), EDI);
                     }
                     _ => {
@@ -351,10 +351,10 @@ impl<'a> AsmGenerator<'a> {
                 self.deref_rax(node.lhs.as_ref().unwrap());
                 let op = if let NodeType::SuffixIncr = node.nt { ADD } else { SUB };
                 match node.lhs.as_ref().unwrap().resolve_type() {
-                    Some(Type::Char) => {
+                    Some(Type::I8) => {
                         self.inst2(op, Ptr(RDX, 1), DIL);
                     }
-                    Some(Type::Int) => {
+                    Some(Type::I32) => {
                         self.inst2(op, Ptr(RDX, 4), EDI);
                     }
                     _ => {
@@ -456,10 +456,10 @@ impl<'a> AsmGenerator<'a> {
 
     fn deref_rax(&mut self, node: &Node) {
         match node.resolve_type() {
-            Some(Type::Int) => {
+            Some(Type::I32) => {
                 self.inst2(MOVSXD, RAX, Ptr(RAX, 4));
             }
-            Some(Type::Char) => {
+            Some(Type::I8) => {
                 self.inst2(MOVSX, RAX, Ptr(RAX, 1));
             }
             _ => {

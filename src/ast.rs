@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use crate::ctype::Type;
 use crate::func::Func;
 use crate::global::{GlobalVariable, GlobalVariableData};
+use crate::tokenizer::TYPES;
 
 pub struct ASTBuilder<'a> {
     code: &'a str,
@@ -20,7 +21,7 @@ pub struct ASTBuilder<'a> {
 pub enum Identifier {
     TypeDef(Type),
     Local(Type, usize),
-    Global(Type),
+    Static(Type),
 }
 
 impl<'a> ASTBuilder<'a> {
@@ -38,19 +39,19 @@ impl<'a> ASTBuilder<'a> {
         let mut map = HashMap::new();
         map.insert(
             String::from("printf"),
-            Identifier::Global(Type::Func(vec![], Box::new(Type::Int))),
+            Identifier::Static(Type::Func(vec![], Box::new(Type::I32))),
         );
         map.insert(
             String::from("puts"),
-            Identifier::Global(Type::Func(vec![], Box::new(Type::Int))),
+            Identifier::Static(Type::Func(vec![], Box::new(Type::I32))),
         );
         map.insert(
             String::from("putchar"),
-            Identifier::Global(Type::Func(vec![], Box::new(Type::Int))),
+            Identifier::Static(Type::Func(vec![], Box::new(Type::I32))),
         );
         map.insert(
             String::from("exit"),
-            Identifier::Global(Type::Func(vec![], Box::new(Type::Int))),
+            Identifier::Static(Type::Func(vec![], Box::new(Type::I32))),
         );
         builder.scope_stack.push(map);
         builder
@@ -143,13 +144,31 @@ impl<'a> ASTBuilder<'a> {
         }
     }
     fn attempt_type(&mut self) -> Option<Type> {
-        if let Some(_) = self.attempt_reserved("int") {
-            Some(Type::Int)
-        } else if let Some(_) = self.attempt_reserved("char") {
-            Some(Type::Char)
-        } else {
-            None
+        let pos = self.tokens[self.cur].pos;
+        let mut map: HashMap<&str, usize> = HashMap::new();
+        loop {
+            let mut is_type = false;
+            for &ty in &TYPES {
+                if let Some(_) = self.attempt_reserved(ty) {
+                    *map.entry(ty).or_default() += 1;
+                    is_type = true;
+                }
+            }
+            if !is_type {
+                break;
+            }
         }
+        if map.len() == 0 {
+            return None
+        }
+        if *map.entry("int").or_default() == 1 {
+            return Some(Type::I32)
+        }
+        if *map.entry("char").or_default() == 1 {
+            return Some(Type::I8)
+        }
+        error_at(self.code, pos, "invalid type");
+        unreachable!();
     }
     fn expect_type(&mut self) -> Type {
         if let Some(ty) = self.attempt_type() {
@@ -183,7 +202,7 @@ impl<'a> ASTBuilder<'a> {
             ).collect();
             self.scope_stack.first_mut().unwrap().insert(
                 t.s_value.clone(),
-                Identifier::Global(
+                Identifier::Static(
                     Type::Func(
                         arg_types.clone(),
                         Box::new(return_type.clone()))));
@@ -220,7 +239,7 @@ impl<'a> ASTBuilder<'a> {
                 };
                 self.scope_stack.last_mut().unwrap().insert(
                     t.s_value.clone(),
-                    Identifier::Global(ty.clone()));
+                    Identifier::Static(ty.clone()));
                 self.global_variables.insert(
                     t.s_value.clone(),
                     GlobalVariable { ty: ty.clone(), data });
@@ -631,7 +650,7 @@ impl<'a> ASTBuilder<'a> {
             return Node {
                 token: Some(t),
                 value: Some(self.unary().resolve_type().unwrap().size_of()),
-                cty: Some(Type::Int),
+                cty: Some(Type::I32),
                 ..Node::default()
             };
         }
@@ -701,7 +720,7 @@ impl<'a> ASTBuilder<'a> {
             Node {
                 token: Some(t.clone()),
                 nt: NodeType::Addr,
-                cty: Some(Type::Ptr(Box::new(Type::Char))),
+                cty: Some(Type::Ptr(Box::new(Type::I8))),
                 lhs: Some(Box::new(node)),
                 ..Node::default()
             }
@@ -711,7 +730,7 @@ impl<'a> ASTBuilder<'a> {
                 token: Some(t.clone()),
                 nt: NodeType::Num,
                 value: Some(t.i_value),
-                cty: Some(Type::Int),
+                cty: Some(Type::I32),
                 ..Node::default()
             }
         } else if let Some(t) = self.attempt_ident() {
@@ -726,7 +745,7 @@ impl<'a> ASTBuilder<'a> {
                             ..Node::default()
                         }
                     }
-                    Identifier::Global(ty) => {
+                    Identifier::Static(ty) => {
                         Node {
                             token: Some(t.clone()),
                             nt: NodeType::GlobalVar,

@@ -189,18 +189,15 @@ impl Node {
             }
             _ => {
                 eprintln!("{}{:?} {{", &indent_str, self.nt);
-                for child in &self.children {
-                    child.print(indent+2);
-                }
-                for child in &self.args{
-                    child.print(indent+2);
-                }
-                if let Some(child) = &self.lhs {
-                    child.print(indent+2);
-                }
-                if let Some(child) = &self.rhs {
-                    child.print(indent+2);
-                }
+                self.ini.iter().for_each(|c| c.print(indent + 2));
+                self.cond.iter().for_each(|c| c.print(indent + 2));
+                self.upd.iter().for_each(|c| c.print(indent + 2));
+                self.then.iter().for_each(|c| c.print(indent + 2));
+                self.els.iter().for_each(|c| c.print(indent + 2));
+                self.lhs.iter().for_each(|c| c.print(indent + 2));
+                self.rhs.iter().for_each(|c| c.print(indent + 2));
+                self.children.iter().for_each(|c| c.print(indent + 2));
+                self.args.iter().for_each(|c| c.print(indent + 2));
                 eprintln!("{}}}", &indent_str);
             }
         }

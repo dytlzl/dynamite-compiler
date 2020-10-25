@@ -15,7 +15,7 @@ impl Func {
     pub fn print(&self) {
         eprintln!("args:");
         for arg in &self.args {
-            eprintln!("{:?}", arg);
+            arg.print(0);
         }
         eprintln!("body:");
         if let Some(n) = &self.body {

@@ -1,7 +1,7 @@
 #[derive(Clone, PartialEq, Debug)]
 pub enum Type {
-    Int,
-    Char,
+    I8,
+    I32,
     Ptr(Box<Type>),
     Arr(Box<Type>, usize),
     Func(Vec<Type>, Box<Type>)
@@ -10,8 +10,8 @@ pub enum Type {
 impl Type {
     pub fn size_of(&self) -> usize {
         match self {
-            Type::Int => 4,
-            Type::Char => 1,
+            Type::I8 => 1,
+            Type::I32 => 4,
             Type::Ptr(_) => 8,
             Type::Arr(t, s) => t.size_of()*s,
             Type::Func(..) => 1,
@@ -28,6 +28,6 @@ impl Type {
 
 impl Default for Type {
     fn default() -> Self {
-        Self::Int
+        Self::I32
     }
 }

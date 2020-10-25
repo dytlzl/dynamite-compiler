@@ -38,9 +38,12 @@ fn main() {
     let mut generator = AsmGenerator::new(
         &builder, &code, target_os);
     generator.gen();
+    if is_debug {
+        return;
+    }
     if let Os::MacOS = target_os {
-        generator.assemblies.iter().for_each(|ass| println!("{}", ass.to_string()) );
+        generator.assemblies.iter().for_each(|ass| println!("{}", ass.to_string()));
     } else {
-        generator.assemblies.iter().for_each(|ass| println!("{}", ass.to_string4linux()) );
+        generator.assemblies.iter().for_each(|ass| println!("{}", ass.to_string4linux()));
     }
 }
