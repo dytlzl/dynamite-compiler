@@ -282,17 +282,7 @@ impl<'a> AsmGenerator<'a> {
                 self.gen_with_node(node.rhs.as_ref().unwrap());
                 self.inst1(POP, RDI);
                 self.inst1(POP, RAX);
-                match node.lhs.as_ref().unwrap().resolve_type() {
-                    Some(Type::I8) => {
-                        self.inst2(MOV, Ptr(RAX, 1), DIL);
-                    }
-                    Some(Type::I32) => {
-                        self.inst2(MOV, Ptr(RAX, 4), EDI);
-                    }
-                    _ => {
-                        self.inst2(MOV, Ptr(RAX, 8), RDI);
-                    }
-                }
+                self.operation2rdi(node.lhs.as_ref().unwrap().resolve_type(), MOV, RAX);
                 self.inst1(PUSH, RDI);
                 return;
             }
@@ -350,17 +340,7 @@ impl<'a> AsmGenerator<'a> {
                 self.inst2(MOV, RDX, RAX);
                 self.deref_rax(node.lhs.as_ref().unwrap());
                 let op = if let NodeType::SuffixIncr = node.nt { ADD } else { SUB };
-                match node.lhs.as_ref().unwrap().resolve_type() {
-                    Some(Type::I8) => {
-                        self.inst2(op, Ptr(RDX, 1), DIL);
-                    }
-                    Some(Type::I32) => {
-                        self.inst2(op, Ptr(RDX, 4), EDI);
-                    }
-                    _ => {
-                        self.inst2(op, Ptr(RDX, 8), RDI);
-                    }
-                }
+                self.operation2rdi(node.lhs.as_ref().unwrap().resolve_type(), op, RDX);
                 self.inst1(PUSH, RAX);
                 return;
             }
@@ -450,6 +430,20 @@ impl<'a> AsmGenerator<'a> {
             }
             _ => {
                 unreachable!();
+            }
+        }
+    }
+
+    fn operation2rdi(&mut self, c_type: Option<Type>, operator: InstOperator, from: Register) {
+        match c_type {
+            Some(Type::I8) => {
+                self.inst2(operator, Ptr(from, 1), DIL);
+            }
+            Some(Type::I32) => {
+                self.inst2(operator, Ptr(from, 4), EDI);
+            }
+            _ => {
+                self.inst2(operator, Ptr(from, 8), RDI);
             }
         }
     }
