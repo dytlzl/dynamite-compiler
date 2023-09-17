@@ -136,7 +136,7 @@ impl InstOperand {
             InstOperand::Reg(r) => format!("{}", r),
             InstOperand::Num(i) => format!("{}", i),
             InstOperand::Label(l) => l.clone(),
-            InstOperand::Str(s) => String::from(s.clone()),
+            InstOperand::Str(s) => String::from(*s),
             InstOperand::Ptr(r, i) => {
                 match i {
                     1 => format!("byte ptr[{}]", r),

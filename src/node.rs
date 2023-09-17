@@ -1,5 +1,5 @@
-use crate::token::Token;
 use crate::ctype::Type;
+use crate::token::Token;
 use std::mem::swap;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -45,7 +45,6 @@ impl Default for NodeType {
     }
 }
 
-
 #[derive(Default, Clone, Debug)]
 pub struct Node {
     pub nt: NodeType,
@@ -79,7 +78,8 @@ impl Node {
     pub fn new_with_op(token: Option<Token>, nt: NodeType, lhs: Node, rhs: Node) -> Self {
         let (mut lhs, mut rhs) = (lhs, rhs);
         if let NodeType::Add = nt {
-            if let Some(_) = lhs.dest_type() {} else {
+            if let Some(_) = lhs.dest_type() {
+            } else {
                 if let Some(_) = rhs.dest_type() {
                     swap(&mut lhs, &mut rhs);
                 }
@@ -115,7 +115,11 @@ impl Node {
             nt: NodeType::If,
             cond: Some(Box::new(cond)),
             then: Some(Box::new(then)),
-            els: if let Some(els) = els { Some(Box::new(els)) } else { None },
+            els: if let Some(els) = els {
+                Some(Box::new(els))
+            } else {
+                None
+            },
             ..Self::default()
         }
     }
@@ -128,20 +132,40 @@ impl Node {
             ..Self::default()
         }
     }
-    pub fn new_for_node(token: Option<Token>, ini: Option<Node>, cond: Option<Node>, upd: Option<Node>, then: Node) -> Self {
+    pub fn new_for_node(
+        token: Option<Token>,
+        ini: Option<Node>,
+        cond: Option<Node>,
+        upd: Option<Node>,
+        then: Node,
+    ) -> Self {
         Self {
             token,
             nt: NodeType::For,
-            ini: if let Some(d) = ini { Some(Box::new(d)) } else { None },
-            cond: if let Some(d) = cond { Some(Box::new(d)) } else { None },
-            upd: if let Some(d) = upd { Some(Box::new(d)) } else { None },
+            ini: if let Some(d) = ini {
+                Some(Box::new(d))
+            } else {
+                None
+            },
+            cond: if let Some(d) = cond {
+                Some(Box::new(d))
+            } else {
+                None
+            },
+            upd: if let Some(d) = upd {
+                Some(Box::new(d))
+            } else {
+                None
+            },
             then: Some(Box::new(then)),
             ..Self::default()
         }
     }
     pub fn resolve_type(&self) -> Option<Type> {
         match self.nt {
-            NodeType::LocalVar | NodeType::Num | NodeType::CallFunc | NodeType::GlobalVar => { self.cty.clone() }
+            NodeType::LocalVar | NodeType::Num | NodeType::CallFunc | NodeType::GlobalVar => {
+                self.cty.clone()
+            }
             NodeType::Addr => {
                 if let Some(ty) = self.lhs.as_ref().unwrap().resolve_type() {
                     Some(Type::Ptr(Box::new(ty)))
@@ -149,9 +173,7 @@ impl Node {
                     self.cty.clone()
                 }
             }
-            NodeType::Deref => {
-                self.lhs.as_ref().unwrap().dest_type()
-            }
+            NodeType::Deref => self.lhs.as_ref().unwrap().dest_type(),
             _ => {
                 if let Some(lhs) = self.lhs.as_ref() {
                     if let (None, Some(rhs)) = (lhs.dest_type(), self.rhs.as_ref()) {
@@ -177,12 +199,18 @@ impl Node {
         let indent_str = " ".repeat(indent);
         match self.nt {
             NodeType::LocalVar => {
-                eprintln!("{}LocalVar: {{ type: {:?}, offset: {} }}", &indent_str,
-                          self.cty.as_ref().unwrap(), self.offset.unwrap());
+                eprintln!(
+                    "{}LocalVar: {{ type: {:?}, offset: {} }}",
+                    &indent_str,
+                    self.cty.as_ref().unwrap(),
+                    self.offset.unwrap()
+                );
             }
             NodeType::GlobalVar => {
-                eprintln!("{}GlobalVar: {{ name: {}{} }}", &indent_str,
-                          &self.global_name, &self.dest);
+                eprintln!(
+                    "{}GlobalVar: {{ name: {}{} }}",
+                    &indent_str, &self.global_name, &self.dest
+                );
             }
             NodeType::Num => {
                 eprintln!("{}Num: {}", &indent_str, self.value.unwrap());

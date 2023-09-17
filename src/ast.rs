@@ -1,11 +1,11 @@
-use crate::token::{Token, TokenType};
-use crate::node::{Node, NodeType};
-use crate::error::{error_at};
-use std::collections::HashMap;
 use crate::ctype::Type;
+use crate::error::error_at;
 use crate::func::Func;
 use crate::global::{GlobalVariable, GlobalVariableData};
+use crate::node::{Node, NodeType};
+use crate::token::{Token, TokenType};
 use crate::tokenizer::TYPES;
+use std::collections::HashMap;
 
 pub struct ASTBuilder<'a> {
     code: &'a str,
@@ -80,14 +80,24 @@ impl<'a> ASTBuilder<'a> {
                 return self.tokens[self.cur - 1].clone();
             }
         }
-        error_at(self.code, self.tokens[self.cur].pos, &format!("`{}` expected", s_value));
+        error_at(
+            self.code,
+            self.tokens[self.cur].pos,
+            &format!("`{}` expected", s_value),
+        );
         unreachable!()
     }
     fn expect_number(&mut self) -> Token {
-        if let TokenType::Num = self.tokens[self.cur].tt {} else {
+        if let TokenType::Num = self.tokens[self.cur].tt {
+        } else {
             error_at(
-                self.code, self.tokens[self.cur].pos,
-                &format!("number expected, but got {}", &self.tokens[self.cur].s_value))
+                self.code,
+                self.tokens[self.cur].pos,
+                &format!(
+                    "number expected, but got {}",
+                    &self.tokens[self.cur].s_value
+                ),
+            )
         }
         self.cur += 1;
         self.tokens[self.cur - 1].clone()
@@ -128,13 +138,19 @@ impl<'a> ASTBuilder<'a> {
     fn new_local_variable(&mut self, ty: Type) -> Node {
         let (t, ty) = self.expect_ident_with_type(ty);
         self.offset_size += ty.size_of();
-        let segment_size =
-            if let Some(dest) = ty.dest_type() { dest.size_of() } else { ty.size_of() };
+        let segment_size = if let Some(dest) = ty.dest_type() {
+            dest.size_of()
+        } else {
+            ty.size_of()
+        };
         self.offset_size += segment_size - self.offset_size % segment_size;
         if self.scope_stack.last().unwrap().contains_key(&t.s_value) {
             error_at(self.code, t.pos, "invalid redeclaration");
         }
-        self.scope_stack.last_mut().unwrap().insert(t.s_value.clone(), Identifier::Local(ty.clone(), self.offset_size));
+        self.scope_stack.last_mut().unwrap().insert(
+            t.s_value.clone(),
+            Identifier::Local(ty.clone(), self.offset_size),
+        );
         Node {
             token: Some(t),
             nt: NodeType::LocalVar,
@@ -159,13 +175,13 @@ impl<'a> ASTBuilder<'a> {
             }
         }
         if map.len() == 0 {
-            return None
+            return None;
         }
         if *map.entry("int").or_default() == 1 {
-            return Some(Type::I32)
+            return Some(Type::I32);
         }
         if *map.entry("char").or_default() == 1 {
-            return Some(Type::I8)
+            return Some(Type::I8);
         }
         error_at(self.code, pos, "invalid type");
         unreachable!();
@@ -182,7 +198,8 @@ impl<'a> ASTBuilder<'a> {
         let ty = self.expect_type();
         let cur_to_back = self.cur;
         let (t, return_type) = self.expect_ident_with_type(ty.clone());
-        if let Some(_) = self.attempt_reserved("(") { // function
+        if let Some(_) = self.attempt_reserved("(") {
+            // function
             self.offset_size = 0;
             self.scope_stack.push(HashMap::new());
             let mut args: Vec<Node> = Vec::new();
@@ -190,45 +207,45 @@ impl<'a> ASTBuilder<'a> {
                 loop {
                     let ty = self.expect_type();
                     args.push(self.new_local_variable(ty));
-                    if let None = self.attempt_reserved(",") { break; }
+                    if let None = self.attempt_reserved(",") {
+                        break;
+                    }
                 }
                 self.expect_reserved(")");
             }
             if args.len() >= 7 {
                 error_at(self.code, t.pos, "count of args must be less than 7")
             }
-            let arg_types: Vec<Type> = args.iter().map(
-                |arg| { arg.resolve_type().clone().unwrap() }
-            ).collect();
+            let arg_types: Vec<Type> = args
+                .iter()
+                .map(|arg| arg.resolve_type().clone().unwrap())
+                .collect();
             self.scope_stack.first_mut().unwrap().insert(
                 t.s_value.clone(),
-                Identifier::Static(
-                    Type::Func(
-                        arg_types.clone(),
-                        Box::new(return_type.clone()))));
+                Identifier::Static(Type::Func(arg_types.clone(), Box::new(return_type.clone()))),
+            );
             self.functions.insert(
                 t.s_value.clone(),
                 Func {
-                    cty: Type::Func(
-                        arg_types.clone(),
-                        Box::new(return_type.clone())),
+                    cty: Type::Func(arg_types.clone(), Box::new(return_type.clone())),
                     token: Some(t.clone()),
                     ..Func::default()
-                });
+                },
+            );
             let body = self.consume_block();
             self.scope_stack.pop();
             self.functions.insert(
                 t.s_value.clone(),
                 Func {
                     body,
-                    cty: Type::Func(
-                        arg_types.clone(),
-                        Box::new(return_type.clone())),
+                    cty: Type::Func(arg_types.clone(), Box::new(return_type.clone())),
                     offset_size: self.offset_size,
                     token: Some(t.clone()),
                     args,
-                });
-        } else { // global variable
+                },
+            );
+        } else {
+            // global variable
             self.cur = cur_to_back; // back the cursor
             loop {
                 let (t, ty) = self.expect_ident_with_type(ty.clone());
@@ -237,12 +254,17 @@ impl<'a> ASTBuilder<'a> {
                 } else {
                     None
                 };
-                self.scope_stack.last_mut().unwrap().insert(
-                    t.s_value.clone(),
-                    Identifier::Static(ty.clone()));
+                self.scope_stack
+                    .last_mut()
+                    .unwrap()
+                    .insert(t.s_value.clone(), Identifier::Static(ty.clone()));
                 self.global_variables.insert(
                     t.s_value.clone(),
-                    GlobalVariable { ty: ty.clone(), data });
+                    GlobalVariable {
+                        ty: ty.clone(),
+                        data,
+                    },
+                );
                 if let None = self.attempt_reserved(",") {
                     break;
                 }
@@ -264,7 +286,9 @@ impl<'a> ASTBuilder<'a> {
             if let None = self.attempt_reserved("}") {
                 loop {
                     vec.push(self.global_data());
-                    if let None = self.attempt_reserved(",") { break; }
+                    if let None = self.attempt_reserved(",") {
+                        break;
+                    }
                 }
                 self.expect_reserved("}");
             }
@@ -280,24 +304,20 @@ impl<'a> ASTBuilder<'a> {
         match node.nt {
             NodeType::Num => node.value.unwrap() as i64,
             NodeType::Eq => {
-                (
-                    self.eval(node.lhs.as_ref().unwrap()) == self.eval(node.rhs.as_ref().unwrap())
-                ) as i64
+                (self.eval(node.lhs.as_ref().unwrap()) == self.eval(node.rhs.as_ref().unwrap()))
+                    as i64
             }
             NodeType::Ne => {
-                (
-                    self.eval(node.lhs.as_ref().unwrap()) != self.eval(node.rhs.as_ref().unwrap())
-                ) as i64
+                (self.eval(node.lhs.as_ref().unwrap()) != self.eval(node.rhs.as_ref().unwrap()))
+                    as i64
             }
             NodeType::Le => {
-                (
-                    self.eval(node.lhs.as_ref().unwrap()) <= self.eval(node.rhs.as_ref().unwrap())
-                ) as i64
+                (self.eval(node.lhs.as_ref().unwrap()) <= self.eval(node.rhs.as_ref().unwrap()))
+                    as i64
             }
             NodeType::Lt => {
-                (
-                    self.eval(node.lhs.as_ref().unwrap()) < self.eval(node.rhs.as_ref().unwrap())
-                ) as i64
+                (self.eval(node.lhs.as_ref().unwrap()) < self.eval(node.rhs.as_ref().unwrap()))
+                    as i64
             }
             NodeType::Add => {
                 self.eval(node.lhs.as_ref().unwrap()) + self.eval(node.rhs.as_ref().unwrap())
@@ -315,8 +335,11 @@ impl<'a> ASTBuilder<'a> {
                 self.eval(node.lhs.as_ref().unwrap()) % self.eval(node.rhs.as_ref().unwrap())
             }
             _ => {
-                error_at(self.code, node.token.as_ref().unwrap().pos,
-                         "initializer element is not a compile-time constant");
+                error_at(
+                    self.code,
+                    node.token.as_ref().unwrap().pos,
+                    "initializer element is not a compile-time constant",
+                );
                 unreachable!()
             }
         }
@@ -346,13 +369,11 @@ impl<'a> ASTBuilder<'a> {
             let mut cond: Option<Node> = None;
             let mut upd: Option<Node> = None;
             if let None = self.attempt_reserved(";") {
-                ini = Some(
-                    if let Some(ty) = self.attempt_type() {
-                        self.local_variable_definition(ty)
-                    } else {
-                        self.expr()
-                    }
-                );
+                ini = Some(if let Some(ty) = self.attempt_type() {
+                    self.local_variable_definition(ty)
+                } else {
+                    self.expr()
+                });
                 self.expect_reserved(";");
             }
             if let None = self.attempt_reserved(";") {
@@ -426,7 +447,9 @@ impl<'a> ASTBuilder<'a> {
                         ..Node::default()
                     };
                     vec.push(self.local_variable_initialization(&node, &assign_token));
-                    if let None = self.attempt_reserved(",") { break; }
+                    if let None = self.attempt_reserved(",") {
+                        break;
+                    }
                     index += 1;
                 }
                 self.expect_reserved("}");
@@ -456,14 +479,12 @@ impl<'a> ASTBuilder<'a> {
                 children.push(self.stmt());
             }
             self.scope_stack.pop();
-            Some(
-                Node {
-                    token: Some(t),
-                    nt: NodeType::Block,
-                    children,
-                    ..Node::default()
-                }
-            )
+            Some(Node {
+                token: Some(t),
+                nt: NodeType::Block,
+                children,
+                ..Node::default()
+            })
         } else {
             None
         }
@@ -478,44 +499,74 @@ impl<'a> ASTBuilder<'a> {
             node = Node::new_with_op(Some(t), NodeType::Assign, node, self.assign())
         } else if let Some(t) = self.attempt_reserved("+=") {
             node = Node::new_with_op(
-                Some(t.clone()), NodeType::Assign, node.clone(),
-                Node::new_with_op(Some(t), NodeType::Add, node, self.assign()))
+                Some(t.clone()),
+                NodeType::Assign,
+                node.clone(),
+                Node::new_with_op(Some(t), NodeType::Add, node, self.assign()),
+            )
         } else if let Some(t) = self.attempt_reserved("-=") {
             node = Node::new_with_op(
-                Some(t.clone()), NodeType::Assign, node.clone(),
-                Node::new_with_op(Some(t), NodeType::Sub, node, self.assign()))
+                Some(t.clone()),
+                NodeType::Assign,
+                node.clone(),
+                Node::new_with_op(Some(t), NodeType::Sub, node, self.assign()),
+            )
         } else if let Some(t) = self.attempt_reserved("*=") {
             node = Node::new_with_op(
-                Some(t.clone()), NodeType::Assign, node.clone(),
-                Node::new_with_op(Some(t), NodeType::Mul, node, self.assign()))
+                Some(t.clone()),
+                NodeType::Assign,
+                node.clone(),
+                Node::new_with_op(Some(t), NodeType::Mul, node, self.assign()),
+            )
         } else if let Some(t) = self.attempt_reserved("/=") {
             node = Node::new_with_op(
-                Some(t.clone()), NodeType::Assign, node.clone(),
-                Node::new_with_op(Some(t), NodeType::Div, node, self.assign()))
+                Some(t.clone()),
+                NodeType::Assign,
+                node.clone(),
+                Node::new_with_op(Some(t), NodeType::Div, node, self.assign()),
+            )
         } else if let Some(t) = self.attempt_reserved("%=") {
             node = Node::new_with_op(
-                Some(t.clone()), NodeType::Assign, node.clone(),
-                Node::new_with_op(Some(t), NodeType::Mod, node, self.assign()))
+                Some(t.clone()),
+                NodeType::Assign,
+                node.clone(),
+                Node::new_with_op(Some(t), NodeType::Mod, node, self.assign()),
+            )
         } else if let Some(t) = self.attempt_reserved("<<=") {
             node = Node::new_with_op(
-                Some(t.clone()), NodeType::Assign, node.clone(),
-                Node::new_with_op(Some(t), NodeType::BitLeft, node, self.assign()))
+                Some(t.clone()),
+                NodeType::Assign,
+                node.clone(),
+                Node::new_with_op(Some(t), NodeType::BitLeft, node, self.assign()),
+            )
         } else if let Some(t) = self.attempt_reserved(">>=") {
             node = Node::new_with_op(
-                Some(t.clone()), NodeType::Assign, node.clone(),
-                Node::new_with_op(Some(t), NodeType::BitRight, node, self.assign()))
+                Some(t.clone()),
+                NodeType::Assign,
+                node.clone(),
+                Node::new_with_op(Some(t), NodeType::BitRight, node, self.assign()),
+            )
         } else if let Some(t) = self.attempt_reserved("&=") {
             node = Node::new_with_op(
-                Some(t.clone()), NodeType::Assign, node.clone(),
-                Node::new_with_op(Some(t), NodeType::BitAnd, node, self.assign()))
+                Some(t.clone()),
+                NodeType::Assign,
+                node.clone(),
+                Node::new_with_op(Some(t), NodeType::BitAnd, node, self.assign()),
+            )
         } else if let Some(t) = self.attempt_reserved("^=") {
             node = Node::new_with_op(
-                Some(t.clone()), NodeType::Assign, node.clone(),
-                Node::new_with_op(Some(t), NodeType::BitXor, node, self.assign()))
+                Some(t.clone()),
+                NodeType::Assign,
+                node.clone(),
+                Node::new_with_op(Some(t), NodeType::BitXor, node, self.assign()),
+            )
         } else if let Some(t) = self.attempt_reserved("|=") {
             node = Node::new_with_op(
-                Some(t.clone()), NodeType::Assign, node.clone(),
-                Node::new_with_op(Some(t), NodeType::BitOr, node, self.assign()))
+                Some(t.clone()),
+                NodeType::Assign,
+                node.clone(),
+                Node::new_with_op(Some(t), NodeType::BitOr, node, self.assign()),
+            )
         }
         node
     }
@@ -654,8 +705,14 @@ impl<'a> ASTBuilder<'a> {
                 ..Node::default()
             };
         }
-        if let Some(_) = self.attempt_reserved("+") {} else if let Some(t) = self.attempt_reserved("-") {
-            return Node::new_with_op(Some(t), NodeType::Sub, Node::new_with_num(None, 0), self.prim());
+        if let Some(_) = self.attempt_reserved("+") {
+        } else if let Some(t) = self.attempt_reserved("-") {
+            return Node::new_with_op(
+                Some(t),
+                NodeType::Sub,
+                Node::new_with_num(None, 0),
+                self.prim(),
+            );
         }
         if let Some(t) = self.attempt_reserved("&") {
             return Node {
@@ -693,14 +750,20 @@ impl<'a> ASTBuilder<'a> {
         if let Some(t) = self.attempt_reserved("++") {
             let node = self.unary();
             return Node::new_with_op(
-                Some(t.clone()), NodeType::Assign, node.clone(),
-                Node::new_with_op(Some(t), NodeType::Add, node, Node::new_with_num(None, 1)));
+                Some(t.clone()),
+                NodeType::Assign,
+                node.clone(),
+                Node::new_with_op(Some(t), NodeType::Add, node, Node::new_with_num(None, 1)),
+            );
         }
         if let Some(t) = self.attempt_reserved("--") {
             let node = self.unary();
             return Node::new_with_op(
-                Some(t.clone()), NodeType::Assign, node.clone(),
-                Node::new_with_op(Some(t), NodeType::Sub, node, Node::new_with_num(None, 1)));
+                Some(t.clone()),
+                NodeType::Assign,
+                node.clone(),
+                Node::new_with_op(Some(t), NodeType::Sub, node, Node::new_with_num(None, 1)),
+            );
         }
         self.prim()
     }
@@ -736,24 +799,20 @@ impl<'a> ASTBuilder<'a> {
         } else if let Some(t) = self.attempt_ident() {
             if let Some(ident) = self.resolve_name(&t.s_value) {
                 match ident {
-                    Identifier::Local(ty, offset) => {
-                        Node {
-                            token: Some(t.clone()),
-                            nt: NodeType::LocalVar,
-                            cty: Some(ty.clone()),
-                            offset: Some(offset.clone()),
-                            ..Node::default()
-                        }
-                    }
-                    Identifier::Static(ty) => {
-                        Node {
-                            token: Some(t.clone()),
-                            nt: NodeType::GlobalVar,
-                            cty: Some(ty.clone()),
-                            global_name: t.s_value.clone(),
-                            ..Node::default()
-                        }
-                    }
+                    Identifier::Local(ty, offset) => Node {
+                        token: Some(t.clone()),
+                        nt: NodeType::LocalVar,
+                        cty: Some(ty.clone()),
+                        offset: Some(offset.clone()),
+                        ..Node::default()
+                    },
+                    Identifier::Static(ty) => Node {
+                        token: Some(t.clone()),
+                        nt: NodeType::GlobalVar,
+                        cty: Some(ty.clone()),
+                        global_name: t.s_value.clone(),
+                        ..Node::default()
+                    },
                     Identifier::TypeDef(..) => {
                         unimplemented!()
                     }
@@ -770,10 +829,11 @@ impl<'a> ASTBuilder<'a> {
             if let Some(_) = self.attempt_reserved("(") {
                 // Call function
                 let t = node.token.clone().unwrap();
-                let return_type = if let Some(Type::Func(_, return_type)) =
-                node.resolve_type() {
+                let return_type = if let Some(Type::Func(_, return_type)) = node.resolve_type() {
                     *return_type.clone()
-                } else { unreachable!() };
+                } else {
+                    unreachable!()
+                };
                 let mut args: Vec<Node> = Vec::new();
                 if let None = self.attempt_reserved(")") {
                     args.push(self.expr());
@@ -833,4 +893,3 @@ impl<'a> ASTBuilder<'a> {
         })
     }
 }
-

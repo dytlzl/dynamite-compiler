@@ -21,12 +21,11 @@ fn main() {
         f.read_to_string(&mut code)
             .expect("something went wrong reading the file");
     }
-    let mut tokenizer = Tokenizer::new();
-    tokenizer.tokenize(&code);
+    let tokens = Tokenizer::tokenize(&code);
     if is_debug {
-        tokenizer.print_tokens();
+        Tokenizer::print_tokens(&tokens);
     }
-    let mut builder = ASTBuilder::new(&code, &tokenizer.tokens);
+    let mut builder = ASTBuilder::new(&code, &tokens);
     builder.build();
     if is_debug {
         builder.print_functions();

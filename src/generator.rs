@@ -1,13 +1,13 @@
-use crate::node::{Node, NodeType};
-use crate::error::{error, error_at};
-use crate::ast::{ASTBuilder};
+use crate::ast::ASTBuilder;
 use crate::ctype::Type;
+use crate::error::{error, error_at};
 use crate::func::Func;
-use crate::instruction::{Instruction, InstOperator, InstOperand, Register, Assembly};
-use crate::instruction::{InstOperator::*, Register::*};
-use std::fmt::Display;
 use crate::global::{GlobalVariable, GlobalVariableData};
-use crate::instruction::InstOperand::{Ptr, PtrAdd, ElseFlag, EndFlag, BeginFlag};
+use crate::instruction::InstOperand::{BeginFlag, ElseFlag, EndFlag, Ptr, PtrAdd};
+use crate::instruction::{Assembly, InstOperand, InstOperator, Instruction, Register};
+use crate::instruction::{InstOperator::*, Register::*};
+use crate::node::{Node, NodeType};
+use std::fmt::Display;
 
 pub struct AsmGenerator<'a> {
     code: &'a str,
@@ -98,19 +98,31 @@ impl<'a> AsmGenerator<'a> {
             Type::I8 => {
                 self.push_assembly(format!(
                     "  .byte {}",
-                    if let Some(GlobalVariableData::Elem(s)) = data { s } else { "0" }
+                    if let Some(GlobalVariableData::Elem(s)) = data {
+                        s
+                    } else {
+                        "0"
+                    }
                 ));
             }
             Type::I32 => {
                 self.push_assembly(format!(
                     "  .4byte {}",
-                    if let Some(GlobalVariableData::Elem(s)) = data { s } else { "0" }
+                    if let Some(GlobalVariableData::Elem(s)) = data {
+                        s
+                    } else {
+                        "0"
+                    }
                 ));
             }
             _ => {
                 self.push_assembly(format!(
                     "  .8byte {}",
-                    if let Some(GlobalVariableData::Elem(s)) = data { s } else { "0" }
+                    if let Some(GlobalVariableData::Elem(s)) = data {
+                        s
+                    } else {
+                        "0"
+                    }
                 ));
             }
         }
@@ -239,7 +251,11 @@ impl<'a> AsmGenerator<'a> {
                 if let Some(&branch_num) = self.loop_stack.last() {
                     self.inst1(JMP, EndFlag(branch_num.clone()));
                 } else {
-                    error_at(self.code, node.token.as_ref().unwrap().pos, "unexpected break found");
+                    error_at(
+                        self.code,
+                        node.token.as_ref().unwrap().pos,
+                        "unexpected break found",
+                    );
                 }
                 return;
             }
@@ -291,11 +307,17 @@ impl<'a> AsmGenerator<'a> {
                 self.gen_with_node(node.lhs.as_ref().unwrap());
                 self.inst1(POP, RAX);
                 self.inst1(POP, RCX);
-                self.inst2(match node.nt {
-                    NodeType::BitLeft => SHL,
-                    NodeType::BitRight => SAR,
-                    _ => { unreachable!() }
-                }, RAX, CL);
+                self.inst2(
+                    match node.nt {
+                        NodeType::BitLeft => SHL,
+                        NodeType::BitRight => SAR,
+                        _ => {
+                            unreachable!()
+                        }
+                    },
+                    RAX,
+                    CL,
+                );
                 self.inst1(PUSH, RAX);
                 return;
             }
@@ -339,7 +361,11 @@ impl<'a> AsmGenerator<'a> {
                 }
                 self.inst2(MOV, RDX, RAX);
                 self.deref_rax(node.lhs.as_ref().unwrap());
-                let op = if let NodeType::SuffixIncr = node.nt { ADD } else { SUB };
+                let op = if let NodeType::SuffixIncr = node.nt {
+                    ADD
+                } else {
+                    SUB
+                };
                 self.operation2rdi(node.lhs.as_ref().unwrap().resolve_type(), op, RDX);
                 self.inst1(PUSH, RAX);
                 return;
@@ -377,13 +403,16 @@ impl<'a> AsmGenerator<'a> {
             }
             NodeType::Eq | NodeType::Ne | NodeType::Lt | NodeType::Le => {
                 self.inst2(CMP, RAX, RDI);
-                self.inst1(match node.nt {
-                    NodeType::Eq => SETE,
-                    NodeType::Ne => SETNE,
-                    NodeType::Lt => SETL,
-                    NodeType::Le => SETLE,
-                    _ => unreachable!()
-                }, AL);
+                self.inst1(
+                    match node.nt {
+                        NodeType::Eq => SETE,
+                        NodeType::Ne => SETNE,
+                        NodeType::Lt => SETL,
+                        NodeType::Le => SETLE,
+                        _ => unreachable!(),
+                    },
+                    AL,
+                );
                 self.inst2(MOVZX, RAX, AL);
             }
             NodeType::BitAnd => {
@@ -463,27 +492,32 @@ impl<'a> AsmGenerator<'a> {
     }
 
     fn inst0(&mut self, operator: InstOperator) {
-        self.assemblies.push(
-            Assembly::Inst(
-                Instruction { operator, operand1: None, operand2: None }
-            )
-        )
+        self.assemblies.push(Assembly::Inst(Instruction {
+            operator,
+            operand1: None,
+            operand2: None,
+        }))
     }
-    fn inst1<T1>(&mut self, operator: InstOperator, operand1: T1) where
-        T1: Into<InstOperand> {
-        self.assemblies.push(
-            Assembly::Inst(
-                Instruction { operator, operand1: Some(operand1.into()), operand2: None }
-            )
-        )
+    fn inst1<T1>(&mut self, operator: InstOperator, operand1: T1)
+    where
+        T1: Into<InstOperand>,
+    {
+        self.assemblies.push(Assembly::Inst(Instruction {
+            operator,
+            operand1: Some(operand1.into()),
+            operand2: None,
+        }))
     }
-    fn inst2<T1, T2>(&mut self, operator: InstOperator, operand1: T1, operand2: T2) where
-        T1: Into<InstOperand>, T2: Into<InstOperand> {
-        self.assemblies.push(
-            Assembly::Inst(
-                Instruction { operator, operand1: Some(operand1.into()), operand2: Some(operand2.into()) }
-            )
-        )
+    fn inst2<T1, T2>(&mut self, operator: InstOperator, operand1: T1, operand2: T2)
+    where
+        T1: Into<InstOperand>,
+        T2: Into<InstOperand>,
+    {
+        self.assemblies.push(Assembly::Inst(Instruction {
+            operator,
+            operand1: Some(operand1.into()),
+            operand2: Some(operand2.into()),
+        }))
     }
 
     fn push_assembly(&mut self, s: impl ToString) {
@@ -491,7 +525,15 @@ impl<'a> AsmGenerator<'a> {
     }
 
     fn with_prefix<T: Display>(&self, s: T) -> String {
-        format!("{}{}", if let Os::MacOS = self.target_os { "_" } else { "" }, s)
+        format!(
+            "{}{}",
+            if let Os::MacOS = self.target_os {
+                "_"
+            } else {
+                ""
+            },
+            s
+        )
     }
 
     fn new_branch_num(&mut self) -> usize {
