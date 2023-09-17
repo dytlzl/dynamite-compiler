@@ -29,8 +29,8 @@ pub enum InstOperator {
     XOR,
 }
 
+use std::fmt::{Debug, Display, Error, Formatter};
 use InstOperator::*;
-use std::fmt::{Display, Formatter, Debug, Error};
 
 impl InstOperator {
     pub fn to_string(&self) -> &str {
@@ -68,7 +68,7 @@ impl InstOperator {
     pub fn to_string4linux(&self) -> &str {
         match self {
             MOVZX => "movzb",
-            _ => self.to_string()
+            _ => self.to_string(),
         }
     }
 }
@@ -95,25 +95,23 @@ use Register::*;
 
 impl Display for Register {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        f.write_str(
-            match self {
-                RAX => "rax",
-                RBX => "rbx",
-                RCX => "rcx",
-                RDX => "rdx",
-                RSI => "rsi",
-                RDI => "rdi",
-                RBP => "rbp",
-                RSP => "rsp",
-                EDI => "edi",
-                DIL => "dil",
-                AL => "al",
-                CL => "cl",
-                RIP => "rip",
-                R8 => "r8",
-                R9 => "r9",
-            }
-        )?;
+        f.write_str(match self {
+            RAX => "rax",
+            RBX => "rbx",
+            RCX => "rcx",
+            RDX => "rdx",
+            RSI => "rsi",
+            RDI => "rdi",
+            RBP => "rbp",
+            RSP => "rsp",
+            EDI => "edi",
+            DIL => "dil",
+            AL => "al",
+            CL => "cl",
+            RIP => "rip",
+            R8 => "r8",
+            R9 => "r9",
+        })?;
         Ok(())
     }
 }
@@ -130,56 +128,48 @@ pub enum InstOperand {
     EndFlag(usize),
 }
 
-impl InstOperand {
-    fn to_string(&self) -> String {
-        match self {
+impl Display for InstOperand {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        f.write_str(&match self {
             InstOperand::Reg(r) => format!("{}", r),
             InstOperand::Num(i) => format!("{}", i),
             InstOperand::Label(l) => l.clone(),
             InstOperand::Str(s) => String::from(*s),
-            InstOperand::Ptr(r, i) => {
-                match i {
-                    1 => format!("byte ptr[{}]", r),
-                    4 => format!("dword ptr[{}]", r),
-                    8 => format!("qword ptr[{}]", r),
-                    _ => unreachable!()
-                }
+            InstOperand::Ptr(r, i) => match i {
+                1 => format!("byte ptr[{}]", r),
+                4 => format!("dword ptr[{}]", r),
+                8 => format!("qword ptr[{}]", r),
+                _ => unreachable!(),
             },
-            InstOperand::ElseFlag(i) =>  format!(".Lelse{}", i),
-            InstOperand::BeginFlag(i) =>  format!(".Lbegin{}", i),
-            InstOperand::EndFlag(i) =>  format!(".Lend{}", i),
+            InstOperand::ElseFlag(i) => format!(".Lelse{}", i),
+            InstOperand::BeginFlag(i) => format!(".Lbegin{}", i),
+            InstOperand::EndFlag(i) => format!(".Lend{}", i),
             InstOperand::PtrAdd(s, r) => format!("[{} + {}]", s, r),
-        }
+        })
     }
 }
 
-impl Display for InstOperand {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        f.write_str(&self.to_string())
+impl From<String> for InstOperand {
+    fn from(val: String) -> Self {
+        InstOperand::Label(val)
     }
 }
 
-impl Into<InstOperand> for String {
-    fn into(self) -> InstOperand {
-        InstOperand::Label(self)
+impl From<&'static str> for InstOperand {
+    fn from(val: &'static str) -> Self {
+        InstOperand::Str(val)
     }
 }
 
-impl Into<InstOperand> for &'static str {
-    fn into(self) -> InstOperand {
-        InstOperand::Str(self)
+impl From<usize> for InstOperand {
+    fn from(val: usize) -> Self {
+        InstOperand::Num(val)
     }
 }
 
-impl Into<InstOperand> for usize {
-    fn into(self) -> InstOperand {
-        InstOperand::Num(self)
-    }
-}
-
-impl Into<InstOperand> for Register {
-    fn into(self) -> InstOperand {
-        InstOperand::Reg(self)
+impl From<Register> for InstOperand {
+    fn from(val: Register) -> Self {
+        InstOperand::Reg(val)
     }
 }
 
@@ -191,11 +181,11 @@ pub struct Instruction {
 impl Instruction {
     pub fn to_string4linux(&self) -> String {
         let mut res = format!("  {}", self.operator.to_string4linux());
-        if let Some(_) = self.operand1 {
+        if self.operand1.is_some() {
             res += " ";
             res += &self.operand1.as_ref().unwrap().to_string()[..]
         }
-        if let Some(_) = self.operand2 {
+        if self.operand2.is_some() {
             res += ", ";
             res += &self.operand2.as_ref().unwrap().to_string()[..]
         }
@@ -206,11 +196,11 @@ impl Instruction {
 impl ToString for Instruction {
     fn to_string(&self) -> String {
         let mut res = format!("  {}", self.operator.to_string());
-        if let Some(_) = self.operand1 {
+        if self.operand1.is_some() {
             res += " ";
             res += &self.operand1.as_ref().unwrap().to_string()[..]
         }
-        if let Some(_) = self.operand2 {
+        if self.operand2.is_some() {
             res += ", ";
             res += &self.operand2.as_ref().unwrap().to_string()[..]
         }

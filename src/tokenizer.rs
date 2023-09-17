@@ -23,9 +23,6 @@ pub fn close_symbol(s: &str) -> Option<&str> {
 pub struct Tokenizer {}
 
 impl Tokenizer {
-    pub fn new() -> Self {
-        Self {}
-    }
     fn reserved_token(pos: usize, s_value: String) -> Token {
         Token {
             tt: TokenType::Reserved,
@@ -152,9 +149,9 @@ impl Tokenizer {
                 }
             }
         }
-        return tokens;
+        tokens
     }
-    pub fn print_tokens(tokens: &Vec<Token>) {
+    pub fn print_tokens(tokens: &[Token]) {
         tokens.iter().for_each(|t| t.print())
     }
 }

@@ -78,10 +78,8 @@ impl Node {
     pub fn new_with_op(token: Option<Token>, nt: NodeType, lhs: Node, rhs: Node) -> Self {
         let (mut lhs, mut rhs) = (lhs, rhs);
         if let NodeType::Add = nt {
-            if let None = lhs.dest_type() {
-                if let Some(_) = rhs.dest_type() {
-                    swap(&mut lhs, &mut rhs);
-                }
+            if lhs.dest_type().is_none() && rhs.dest_type().is_some() {
+                swap(&mut lhs, &mut rhs);
             }
         }
         Self {
@@ -114,11 +112,7 @@ impl Node {
             nt: NodeType::If,
             cond: Some(Box::new(cond)),
             then: Some(Box::new(then)),
-            els: if let Some(els) = els {
-                Some(Box::new(els))
-            } else {
-                None
-            },
+            els: els.map(Box::new),
             ..Self::default()
         }
     }
@@ -141,21 +135,9 @@ impl Node {
         Self {
             token,
             nt: NodeType::For,
-            ini: if let Some(d) = ini {
-                Some(Box::new(d))
-            } else {
-                None
-            },
-            cond: if let Some(d) = cond {
-                Some(Box::new(d))
-            } else {
-                None
-            },
-            upd: if let Some(d) = upd {
-                Some(Box::new(d))
-            } else {
-                None
-            },
+            ini: ini.map(Box::new),
+            cond: cond.map(Box::new),
+            upd: upd.map(Box::new),
             then: Some(Box::new(then)),
             ..Self::default()
         }
@@ -176,7 +158,7 @@ impl Node {
             _ => {
                 if let Some(lhs) = self.lhs.as_ref() {
                     if let (None, Some(rhs)) = (lhs.dest_type(), self.rhs.as_ref()) {
-                        if let Some(_) = rhs.dest_type() {
+                        if rhs.dest_type().is_some() {
                             return rhs.resolve_type();
                         }
                     }

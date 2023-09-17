@@ -195,7 +195,7 @@ impl<'a> AsmGenerator<'a> {
                 self.gen_with_node(node.then.as_ref().unwrap());
                 self.inst1(JMP, EndFlag(branch_num));
                 self.push_assembly(format!("{}:", ElseFlag(branch_num)));
-                if let Some(_) = node.els {
+                if node.els.is_some() {
                     self.gen_with_node(node.els.as_ref().unwrap());
                 }
                 self.push_assembly(format!("{}:", EndFlag(branch_num)));
@@ -219,13 +219,13 @@ impl<'a> AsmGenerator<'a> {
             NodeType::For => {
                 let branch_num = self.new_branch_num();
                 self.loop_stack.push(branch_num);
-                if let Some(_) = node.ini {
+                if node.ini.is_some() {
                     self.gen_with_node(node.ini.as_ref().unwrap());
                     self.inst1(POP, RAX);
                 }
                 self.push_assembly(format!("{}:", BeginFlag(branch_num)));
                 self.reset_stack();
-                if let Some(_) = node.cond {
+                if node.cond.is_some() {
                     self.gen_with_node(node.cond.as_ref().unwrap());
                     self.inst1(POP, RAX);
                 } else {
@@ -234,7 +234,7 @@ impl<'a> AsmGenerator<'a> {
                 self.inst2(CMP, RAX, 0);
                 self.inst1(JE, EndFlag(branch_num));
                 self.gen_with_node(node.then.as_ref().unwrap());
-                if let Some(_) = node.upd {
+                if node.upd.is_some() {
                     self.gen_with_node(node.upd.as_ref().unwrap());
                     self.inst1(POP, RAX);
                 }
@@ -249,7 +249,7 @@ impl<'a> AsmGenerator<'a> {
             }
             NodeType::Break => {
                 if let Some(&branch_num) = self.loop_stack.last() {
-                    self.inst1(JMP, EndFlag(branch_num.clone()));
+                    self.inst1(JMP, EndFlag(branch_num));
                 } else {
                     error_at(
                         self.code,
@@ -442,7 +442,7 @@ impl<'a> AsmGenerator<'a> {
     fn gen_addr(&mut self, node: &Node) {
         match node.nt {
             NodeType::GlobalVar => {
-                if node.dest != "" {
+                if !node.dest.is_empty() {
                     self.inst2(LEA, RAX, PtrAdd(RIP, node.dest.clone()));
                 } else {
                     self.inst2(LEA, RAX, PtrAdd(RIP, self.with_prefix(&node.global_name)));

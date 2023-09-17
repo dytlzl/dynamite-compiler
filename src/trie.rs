@@ -41,7 +41,7 @@ impl Trie {
                         .take(index + offset + END_SYMBOL * 3 - self.double_array.len()),
                 )
             }
-            for (&c_index, _) in &dict.children {
+            for &c_index in dict.children.keys() {
                 if self.double_array[index + offset + c_index].0 != 0 {
                     self.double_array[index].1 += 1;
                     is_matching = false;
@@ -53,7 +53,7 @@ impl Trie {
             }
         }
         let offset = self.double_array[index].1;
-        for (&c_index, _) in &dict.children {
+        for &c_index in dict.children.keys() {
             self.double_array[index + offset + c_index].0 = index;
         }
         for (&c_index, d) in &dict.children {
