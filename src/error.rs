@@ -10,7 +10,7 @@ pub fn error(err: &str) {
 pub fn error_at(code: &str, pos: usize, err: &str) {
     let mut start_index = 0;
     let mut line_count = 1;
-    for (i, c) in (&code[..pos]).char_indices().into_iter() {
+    for (i, c) in code[..pos].char_indices() {
         if c == '\n' {
             line_count += 1;
             start_index = i + c.len_utf8();
@@ -18,7 +18,7 @@ pub fn error_at(code: &str, pos: usize, err: &str) {
     }
     let row_number = format!("{} | ", line_count);
     let mut end_index = code.len();
-    for (i, c) in (&code[pos..]).char_indices().into_iter() {
+    for (i, c) in code[..pos].char_indices() {
         if c == '\n' {
             end_index = pos + i;
             break;

@@ -68,7 +68,7 @@ impl<'a> ASTBuilder<'a> {
     fn attempt_ident(&mut self) -> Option<Token> {
         if let TokenType::Ident = self.tokens[self.cur].tt {
             self.cur += 1;
-            return Some(self.tokens[self.cur - 1].clone());
+            Some(self.tokens[self.cur - 1].clone())
         } else {
             None
         }
@@ -120,11 +120,11 @@ impl<'a> ASTBuilder<'a> {
     }
     fn expect_ident_with_type(&mut self, ty: Type) -> (Token, Type) {
         let mut ty = ty.clone();
-        while let Some(_) = self.attempt_reserved("*") {
+        while self.attempt_reserved("*").is_some() {
             ty = Type::Ptr(Box::new(ty));
         }
         if let Some(t) = self.attempt_ident() {
-            while let Some(_) = self.attempt_reserved("[") {
+            while self.attempt_reserved("[").is_some() {
                 let n = self.expect_number();
                 ty = Type::Arr(Box::new(ty), n.i_value);
                 self.expect_reserved("]");
@@ -165,7 +165,7 @@ impl<'a> ASTBuilder<'a> {
         loop {
             let mut is_type = false;
             for &ty in &TYPES {
-                if let Some(_) = self.attempt_reserved(ty) {
+                if self.attempt_reserved(ty).is_some() {
                     *map.entry(ty).or_default() += 1;
                     is_type = true;
                 }
@@ -174,7 +174,7 @@ impl<'a> ASTBuilder<'a> {
                 break;
             }
         }
-        if map.len() == 0 {
+        if map.is_empty() {
             return None;
         }
         if *map.entry("int").or_default() == 1 {
@@ -198,16 +198,16 @@ impl<'a> ASTBuilder<'a> {
         let ty = self.expect_type();
         let cur_to_back = self.cur;
         let (t, return_type) = self.expect_ident_with_type(ty.clone());
-        if let Some(_) = self.attempt_reserved("(") {
+        if self.attempt_reserved("(").is_some() {
             // function
             self.offset_size = 0;
             self.scope_stack.push(HashMap::new());
             let mut args: Vec<Node> = Vec::new();
-            if let None = self.attempt_reserved(")") {
+            if self.attempt_reserved(")").is_none() {
                 loop {
                     let ty = self.expect_type();
                     args.push(self.new_local_variable(ty));
-                    if let None = self.attempt_reserved(",") {
+                    if self.attempt_reserved(",").is_none() {
                         break;
                     }
                 }
@@ -249,11 +249,7 @@ impl<'a> ASTBuilder<'a> {
             self.cur = cur_to_back; // back the cursor
             loop {
                 let (t, ty) = self.expect_ident_with_type(ty.clone());
-                let data = if let Some(_) = self.attempt_reserved("=") {
-                    Some(self.global_data())
-                } else {
-                    None
-                };
+                let data = self.attempt_reserved("=").map(|_| self.global_data());
                 self.scope_stack
                     .last_mut()
                     .unwrap()
@@ -265,7 +261,7 @@ impl<'a> ASTBuilder<'a> {
                         data,
                     },
                 );
-                if let None = self.attempt_reserved(",") {
+                if self.attempt_reserved(",").is_none() {
                     break;
                 }
             }
@@ -278,15 +274,15 @@ impl<'a> ASTBuilder<'a> {
                 return map.get(s);
             }
         }
-        return None;
+        None
     }
     fn global_data(&mut self) -> GlobalVariableData {
-        if let Some(_) = self.attempt_reserved("{") {
+        if self.attempt_reserved("{").is_some() {
             let mut vec = Vec::new();
-            if let None = self.attempt_reserved("}") {
+            if self.attempt_reserved("}").is_none() {
                 loop {
                     vec.push(self.global_data());
-                    if let None = self.attempt_reserved(",") {
+                    if self.attempt_reserved(",").is_none() {
                         break;
                     }
                 }
@@ -351,7 +347,7 @@ impl<'a> ASTBuilder<'a> {
             self.expect_reserved(")");
             let then = self.stmt();
             let mut els: Option<Node> = None;
-            if let Some(_) = self.attempt_reserved("else") {
+            if self.attempt_reserved("else").is_some() {
                 els = Some(self.stmt());
             }
             return Node::new_if_node(Some(t), cond, then, els);
@@ -368,7 +364,7 @@ impl<'a> ASTBuilder<'a> {
             let mut ini: Option<Node> = None;
             let mut cond: Option<Node> = None;
             let mut upd: Option<Node> = None;
-            if let None = self.attempt_reserved(";") {
+            if self.attempt_reserved(";").is_none() {
                 ini = Some(if let Some(ty) = self.attempt_type() {
                     self.local_variable_definition(ty)
                 } else {
@@ -376,11 +372,11 @@ impl<'a> ASTBuilder<'a> {
                 });
                 self.expect_reserved(";");
             }
-            if let None = self.attempt_reserved(";") {
+            if self.attempt_reserved(";").is_none() {
                 cond = Some(self.expr());
                 self.expect_reserved(";");
             }
-            if let None = self.attempt_reserved(")") {
+            if self.attempt_reserved(")").is_none() {
                 upd = Some(self.expr());
                 self.expect_reserved(")");
             }
@@ -415,7 +411,7 @@ impl<'a> ASTBuilder<'a> {
                 // if initializer element exists, push into AST
                 vec.push(self.local_variable_initialization(&node, &token));
             }
-            if let None = self.attempt_reserved(",") {
+            if self.attempt_reserved(",").is_none() {
                 break;
             }
         }
@@ -429,7 +425,7 @@ impl<'a> ASTBuilder<'a> {
     fn local_variable_initialization(&mut self, node: &Node, assign_token: &Token) -> Node {
         if let Some(b_token) = self.attempt_reserved("{") {
             let mut vec = Vec::new();
-            if let None = self.attempt_reserved("}") {
+            if self.attempt_reserved("}").is_none() {
                 let mut index = 0;
                 loop {
                     let rhs = Node::new_with_num(None, index);
@@ -446,8 +442,8 @@ impl<'a> ASTBuilder<'a> {
                         lhs: Some(Box::new(node)),
                         ..Node::default()
                     };
-                    vec.push(self.local_variable_initialization(&node, &assign_token));
-                    if let None = self.attempt_reserved(",") {
+                    vec.push(self.local_variable_initialization(&node, assign_token));
+                    if self.attempt_reserved(",").is_none() {
                         break;
                     }
                     index += 1;
@@ -475,7 +471,7 @@ impl<'a> ASTBuilder<'a> {
         if let Some(t) = self.attempt_reserved("{") {
             self.scope_stack.push(HashMap::new());
             let mut children: Vec<Node> = Vec::new();
-            while let None = self.attempt_reserved("}") {
+            while self.attempt_reserved("}").is_none() {
                 children.push(self.stmt());
             }
             self.scope_stack.pop();
@@ -578,7 +574,7 @@ impl<'a> ASTBuilder<'a> {
             let els = self.logical_or();
             return Node::new_if_node(Some(t), node, then, Some(els));
         }
-        return node;
+        node
     }
     fn logical_or(&mut self) -> Node {
         let mut node = self.logical_and();
@@ -705,7 +701,7 @@ impl<'a> ASTBuilder<'a> {
                 ..Node::default()
             };
         }
-        if let Some(_) = self.attempt_reserved("+") {
+        if self.attempt_reserved("+").is_some() {
         } else if let Some(t) = self.attempt_reserved("-") {
             return Node::new_with_op(
                 Some(t),
@@ -768,7 +764,7 @@ impl<'a> ASTBuilder<'a> {
         self.prim()
     }
     fn prim(&mut self) -> Node {
-        let mut node = if let Some(_) = self.attempt_reserved("(") {
+        let mut node = if self.attempt_reserved("(").is_some() {
             let node = self.expr();
             self.expect_reserved(")");
             node
@@ -803,7 +799,7 @@ impl<'a> ASTBuilder<'a> {
                         token: Some(t.clone()),
                         nt: NodeType::LocalVar,
                         cty: Some(ty.clone()),
-                        offset: Some(offset.clone()),
+                        offset: Some(*offset),
                         ..Node::default()
                     },
                     Identifier::Static(ty) => Node {
@@ -826,7 +822,7 @@ impl<'a> ASTBuilder<'a> {
             unreachable!();
         };
         loop {
-            if let Some(_) = self.attempt_reserved("(") {
+            if self.attempt_reserved("(").is_some() {
                 // Call function
                 let t = node.token.clone().unwrap();
                 let return_type = if let Some(Type::Func(_, return_type)) = node.resolve_type() {
@@ -835,9 +831,9 @@ impl<'a> ASTBuilder<'a> {
                     unreachable!()
                 };
                 let mut args: Vec<Node> = Vec::new();
-                if let None = self.attempt_reserved(")") {
+                if self.attempt_reserved(")").is_none() {
                     args.push(self.expr());
-                    while let None = self.attempt_reserved(")") {
+                    while self.attempt_reserved(")").is_none() {
                         self.expect_reserved(",");
                         args.push(self.expr());
                     }
@@ -852,7 +848,7 @@ impl<'a> ASTBuilder<'a> {
                 node = Node {
                     token: Some(t),
                     nt: NodeType::CallFunc,
-                    global_name: String::from(s_value),
+                    global_name: s_value,
                     cty: Some(return_type),
                     args,
                     ..Node::default()
@@ -885,11 +881,12 @@ impl<'a> ASTBuilder<'a> {
     }
 
     pub fn print_functions(&self) {
-        self.functions.iter().for_each(|(s, f)| {
-            if let Some(..) = f.body {
+        self.functions
+            .iter()
+            .filter(|(_, f)| f.body.is_some())
+            .for_each(|(s, f)| {
                 eprintln!("[FUNC: {}]", s);
                 f.print();
-            }
-        })
+            })
     }
 }

@@ -78,8 +78,7 @@ impl Node {
     pub fn new_with_op(token: Option<Token>, nt: NodeType, lhs: Node, rhs: Node) -> Self {
         let (mut lhs, mut rhs) = (lhs, rhs);
         if let NodeType::Add = nt {
-            if let Some(_) = lhs.dest_type() {
-            } else {
+            if let None = lhs.dest_type() {
                 if let Some(_) = rhs.dest_type() {
                     swap(&mut lhs, &mut rhs);
                 }

@@ -62,7 +62,7 @@ impl<'a> AsmGenerator<'a> {
     }
 
     pub fn gen_string_literals(&mut self) {
-        if self.builder.string_literals.len() != 0 {
+        if !self.builder.string_literals.is_empty() {
             if let Os::MacOS = self.target_os {
                 self.push_assembly(".section __TEXT,__cstring,cstring_literals");
             } else {
@@ -129,7 +129,7 @@ impl<'a> AsmGenerator<'a> {
     }
 
     pub fn gen_func(&mut self, name: &str, func: &Func) {
-        if let None = func.body {
+        if func.body.is_none() {
             return;
         }
         self.push_assembly(format!(".globl {}", self.with_prefix(name)));
@@ -177,8 +177,8 @@ impl<'a> AsmGenerator<'a> {
                 for node in &node.args {
                     self.gen_with_node(node);
                 }
-                for i in 0..node.args.len() {
-                    self.inst1(POP, ARGS_REG[i]);
+                for op in ARGS_REG.iter().take(node.args.len()) {
+                    self.inst1(POP, *op);
                 }
                 self.inst1(CALL, self.with_prefix(&node.global_name));
                 self.inst1(POP, RDI);
