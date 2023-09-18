@@ -18,7 +18,6 @@ pub struct AsmGenerator<'a> {
     branch_count: usize,
     loop_stack: Vec<usize>,
     builder: &'a dyn AstBuilder,
-    current_stack_size: usize,
     pub assemblies: Vec<Assembly>,
 }
 
@@ -42,7 +41,6 @@ impl<'a> AsmGenerator<'a> {
             builder,
             branch_count: 0,
             loop_stack: Vec::new(),
-            current_stack_size: 0,
             assemblies: Vec::new(),
         }
     }
@@ -90,29 +88,44 @@ impl<'a> AsmGenerator<'a> {
     }
 
     pub fn gen(&mut self) {
-        self.push_assembly(".intel_syntax noprefix");
-        if let Os::MacOS = self.target_os {
-            self.push_assembly(".section __TEXT,__text,regular,pure_instructions");
-        } else {
-            self.push_assembly(".section .text");
-        }
-        for (s, f) in self.builder.functions() {
-            self.gen_func(s, f);
-        }
-        if let Os::MacOS = self.target_os {
-            self.push_assembly(".section __DATA,__data");
-        } else {
-            self.push_assembly(".section .data");
-        }
         self.assemblies.push(
-            self.builder
-                .global_variables()
-                .iter()
-                .map(|(s, gv)| self.gen_global_variable(s, gv))
-                .collect::<Vec<Assembly>>()
+            vec![
+                ".intel_syntax noprefix".into(),
+                if let Os::MacOS = self.target_os {
+                    ".section __TEXT,__text,regular,pure_instructions"
+                } else {
+                    ".section .text"
+                }
                 .into(),
+            ]
+            .into(),
         );
-        self.assemblies.push(self.gen_string_literals());
+        self.builder
+            .functions()
+            .iter()
+            .fold(0, |last_offset, (name, f)| {
+                let stack_offset = last_offset + f.offset_size;
+                self.gen_func(name, f, stack_offset);
+                stack_offset
+            });
+        self.assemblies.push(
+            vec![
+                if let Os::MacOS = self.target_os {
+                    ".section __DATA,__data"
+                } else {
+                    ".section .data"
+                }
+                .into(),
+                self.builder
+                    .global_variables()
+                    .iter()
+                    .map(|(s, gv)| self.gen_global_variable(s, gv))
+                    .collect::<Vec<Assembly>>()
+                    .into(),
+                self.gen_string_literals(),
+            ]
+            .into(),
+        )
     }
 
     pub fn gen_string_literals(&self) -> Assembly {
@@ -209,7 +222,7 @@ impl<'a> AsmGenerator<'a> {
         }
     }
 
-    pub fn gen_func(&mut self, name: &str, func: &Func) {
+    pub fn gen_func(&mut self, name: &str, func: &Func, offset: usize) {
         if func.body.is_none() {
             return;
         }
@@ -230,8 +243,7 @@ impl<'a> AsmGenerator<'a> {
                     .print_error_position(arg.token.as_ref().unwrap().pos, "ident expected");
             }
         }
-        self.current_stack_size = func.offset_size;
-        self.gen_with_node(func.body.as_ref().unwrap());
+        self.gen_with_node(func.body.as_ref().unwrap(), offset);
         self.inst2(MOV, RAX, 0); // default return value
         self.epilogue();
     }
@@ -240,10 +252,10 @@ impl<'a> AsmGenerator<'a> {
         self.assemblies.push(Assembly::epilogue());
     }
 
-    fn gen_with_node(&mut self, node: &Node) {
+    fn gen_with_node(&mut self, node: &Node, offset: usize) {
         match node.nt {
             NodeType::DefVar => {
-                self.gen_with_vec(&node.children);
+                self.gen_with_vec(&node.children, offset);
                 return;
             }
             NodeType::CallFunc => {
@@ -255,7 +267,7 @@ impl<'a> AsmGenerator<'a> {
                 self.inst2(SUB, RSP, RDX);
                 self.inst1(PUSH, RDX);
                 for node in &node.args {
-                    self.gen_with_node(node);
+                    self.gen_with_node(node, offset);
                 }
                 for op in ARGS_REG.iter().take(node.args.len()) {
                     self.inst1(POP, *op);
@@ -268,15 +280,15 @@ impl<'a> AsmGenerator<'a> {
             }
             NodeType::If => {
                 let branch_num = self.new_branch_num();
-                self.gen_with_node(node.cond.as_ref().unwrap());
+                self.gen_with_node(node.cond.as_ref().unwrap(), offset);
                 self.inst1(POP, RAX);
                 self.inst2(CMP, RAX, 0);
                 self.inst1(JE, ElseFlag(branch_num));
-                self.gen_with_node(node.then.as_ref().unwrap());
+                self.gen_with_node(node.then.as_ref().unwrap(), offset);
                 self.inst1(JMP, EndFlag(branch_num));
                 self.push_assembly(format!("{}:", ElseFlag(branch_num)));
                 if node.els.is_some() {
-                    self.gen_with_node(node.els.as_ref().unwrap());
+                    self.gen_with_node(node.els.as_ref().unwrap(), offset);
                 }
                 self.push_assembly(format!("{}:", EndFlag(branch_num)));
                 return;
@@ -285,13 +297,12 @@ impl<'a> AsmGenerator<'a> {
                 let branch_num = self.new_branch_num();
                 self.loop_stack.push(branch_num);
                 self.push_assembly(format!("{}:", BeginFlag(branch_num)));
-                self.assemblies
-                    .push(Assembly::reset_stack(self.current_stack_size));
-                self.gen_with_node(node.cond.as_ref().unwrap());
+                self.assemblies.push(Assembly::reset_stack(offset));
+                self.gen_with_node(node.cond.as_ref().unwrap(), offset);
                 self.inst1(POP, RAX);
                 self.inst2(CMP, RAX, 0);
                 self.inst1(JE, EndFlag(branch_num));
-                self.gen_with_node(node.then.as_ref().unwrap());
+                self.gen_with_node(node.then.as_ref().unwrap(), offset);
                 self.inst1(JMP, BeginFlag(branch_num));
                 self.push_assembly(format!("{}:", EndFlag(branch_num)));
                 self.loop_stack.pop();
@@ -301,23 +312,22 @@ impl<'a> AsmGenerator<'a> {
                 let branch_num = self.new_branch_num();
                 self.loop_stack.push(branch_num);
                 if node.ini.is_some() {
-                    self.gen_with_node(node.ini.as_ref().unwrap());
+                    self.gen_with_node(node.ini.as_ref().unwrap(), offset);
                     self.inst1(POP, RAX);
                 }
                 self.push_assembly(format!("{}:", BeginFlag(branch_num)));
-                self.assemblies
-                    .push(Assembly::reset_stack(self.current_stack_size));
+                self.assemblies.push(Assembly::reset_stack(offset));
                 if node.cond.is_some() {
-                    self.gen_with_node(node.cond.as_ref().unwrap());
+                    self.gen_with_node(node.cond.as_ref().unwrap(), offset);
                     self.inst1(POP, RAX);
                 } else {
                     self.inst2(MOV, RAX, 1);
                 }
                 self.inst2(CMP, RAX, 0);
                 self.inst1(JE, EndFlag(branch_num));
-                self.gen_with_node(node.then.as_ref().unwrap());
+                self.gen_with_node(node.then.as_ref().unwrap(), offset);
                 if node.upd.is_some() {
-                    self.gen_with_node(node.upd.as_ref().unwrap());
+                    self.gen_with_node(node.upd.as_ref().unwrap(), offset);
                     self.inst1(POP, RAX);
                 }
                 self.inst1(JMP, BeginFlag(branch_num));
@@ -326,7 +336,7 @@ impl<'a> AsmGenerator<'a> {
                 return;
             }
             NodeType::Block => {
-                self.gen_with_vec(&node.children);
+                self.gen_with_vec(&node.children, offset);
                 return;
             }
             NodeType::Break => {
@@ -341,7 +351,7 @@ impl<'a> AsmGenerator<'a> {
                 return;
             }
             NodeType::Return => {
-                self.gen_with_node(node.lhs.as_ref().unwrap());
+                self.gen_with_node(node.lhs.as_ref().unwrap(), offset);
                 self.inst1(POP, RAX);
                 self.epilogue();
                 return;
@@ -351,7 +361,7 @@ impl<'a> AsmGenerator<'a> {
                 return;
             }
             NodeType::LocalVar | NodeType::GlobalVar => {
-                self.gen_addr(node);
+                self.gen_addr(node, offset);
                 if let Some(Type::Arr(_, _)) = node.resolve_type() {
                     return;
                 }
@@ -361,11 +371,11 @@ impl<'a> AsmGenerator<'a> {
                 return;
             }
             NodeType::Addr => {
-                self.gen_addr(node.lhs.as_ref().unwrap());
+                self.gen_addr(node.lhs.as_ref().unwrap(), offset);
                 return;
             }
             NodeType::Deref => {
-                self.gen_with_node(node.lhs.as_ref().unwrap());
+                self.gen_with_node(node.lhs.as_ref().unwrap(), offset);
                 if let Some(Type::Arr(..)) = node.lhs.as_ref().unwrap().dest_type() {
                     return;
                 }
@@ -375,8 +385,8 @@ impl<'a> AsmGenerator<'a> {
                 return;
             }
             NodeType::Assign => {
-                self.gen_addr(node.lhs.as_ref().unwrap());
-                self.gen_with_node(node.rhs.as_ref().unwrap());
+                self.gen_addr(node.lhs.as_ref().unwrap(), offset);
+                self.gen_with_node(node.rhs.as_ref().unwrap(), offset);
                 self.inst1(POP, RDI);
                 self.inst1(POP, RAX);
                 self.operation2rdi(node.lhs.as_ref().unwrap().resolve_type(), MOV, RAX);
@@ -384,8 +394,8 @@ impl<'a> AsmGenerator<'a> {
                 return;
             }
             NodeType::BitLeft | NodeType::BitRight => {
-                self.gen_with_node(node.rhs.as_ref().unwrap());
-                self.gen_with_node(node.lhs.as_ref().unwrap());
+                self.gen_with_node(node.rhs.as_ref().unwrap(), offset);
+                self.gen_with_node(node.lhs.as_ref().unwrap(), offset);
                 self.inst1(POP, RAX);
                 self.inst1(POP, RCX);
                 self.inst2(
@@ -403,7 +413,7 @@ impl<'a> AsmGenerator<'a> {
                 return;
             }
             NodeType::BitNot => {
-                self.gen_with_node(node.lhs.as_ref().unwrap());
+                self.gen_with_node(node.lhs.as_ref().unwrap(), offset);
                 self.inst1(POP, RAX);
                 self.inst1(NOT, RAX);
                 self.inst1(PUSH, RAX);
@@ -411,11 +421,11 @@ impl<'a> AsmGenerator<'a> {
             }
             NodeType::LogicalAnd => {
                 let branch_num = self.new_branch_num();
-                self.gen_with_node(node.lhs.as_ref().unwrap());
+                self.gen_with_node(node.lhs.as_ref().unwrap(), offset);
                 self.inst1(POP, RAX);
                 self.inst2(CMP, RAX, 0);
                 self.inst1(JE, EndFlag(branch_num));
-                self.gen_with_node(node.rhs.as_ref().unwrap());
+                self.gen_with_node(node.rhs.as_ref().unwrap(), offset);
                 self.inst1(POP, RAX);
                 self.push_assembly(format!("{}:", EndFlag(branch_num)));
                 self.inst1(PUSH, RAX);
@@ -423,18 +433,18 @@ impl<'a> AsmGenerator<'a> {
             }
             NodeType::LogicalOr => {
                 let branch_num = self.new_branch_num();
-                self.gen_with_node(node.lhs.as_ref().unwrap());
+                self.gen_with_node(node.lhs.as_ref().unwrap(), offset);
                 self.inst1(POP, RAX);
                 self.inst2(CMP, RAX, 0);
                 self.inst1(JNE, EndFlag(branch_num));
-                self.gen_with_node(node.rhs.as_ref().unwrap());
+                self.gen_with_node(node.rhs.as_ref().unwrap(), offset);
                 self.inst1(POP, RAX);
                 self.push_assembly(format!("{}:", EndFlag(branch_num)));
                 self.inst1(PUSH, RAX);
                 return;
             }
             NodeType::SuffixIncr | NodeType::SuffixDecr => {
-                self.gen_addr(node.lhs.as_ref().unwrap());
+                self.gen_addr(node.lhs.as_ref().unwrap(), offset);
                 self.inst1(POP, RAX);
                 self.inst2(MOV, RDI, 1);
                 if let Some(t) = node.lhs.as_ref().unwrap().dest_type() {
@@ -453,8 +463,8 @@ impl<'a> AsmGenerator<'a> {
             }
             _ => {}
         }
-        self.gen_with_node(node.rhs.as_ref().unwrap());
-        self.gen_with_node(node.lhs.as_ref().unwrap());
+        self.gen_with_node(node.rhs.as_ref().unwrap(), offset);
+        self.gen_with_node(node.lhs.as_ref().unwrap(), offset);
         self.inst1(POP, RAX);
         self.inst1(POP, RDI);
         match node.nt {
@@ -513,16 +523,15 @@ impl<'a> AsmGenerator<'a> {
         self.inst1(PUSH, RAX);
     }
 
-    fn gen_with_vec(&mut self, v: &Vec<Node>) {
+    fn gen_with_vec(&mut self, v: &Vec<Node>, offset: usize) {
         for node in v {
-            self.gen_with_node(node);
+            self.gen_with_node(node, offset);
             self.inst1(POP, RAX);
-            self.assemblies
-                .push(Assembly::reset_stack(self.current_stack_size));
+            self.assemblies.push(Assembly::reset_stack(offset));
         }
     }
 
-    fn gen_addr(&mut self, node: &Node) {
+    fn gen_addr(&mut self, node: &Node, offset: usize) {
         match node.nt {
             NodeType::GlobalVar => {
                 if !node.dest.is_empty() {
@@ -538,7 +547,7 @@ impl<'a> AsmGenerator<'a> {
                 self.inst1(PUSH, RAX);
             }
             NodeType::Deref => {
-                self.gen_with_node(node.lhs.as_ref().unwrap());
+                self.gen_with_node(node.lhs.as_ref().unwrap(), offset);
             }
             _ => {
                 unreachable!();
