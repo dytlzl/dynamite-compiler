@@ -104,9 +104,14 @@ impl<'a> AsmGenerator<'a> {
         } else {
             self.push_assembly(".section .data");
         }
-        for (s, gv) in self.builder.global_variables() {
-            self.gen_global_variable(s, gv);
-        }
+        self.assemblies.push(
+            self.builder
+                .global_variables()
+                .iter()
+                .map(|(s, gv)| self.gen_global_variable(s, gv))
+                .collect::<Vec<Assembly>>()
+                .into(),
+        );
         self.assemblies.push(self.gen_string_literals());
     }
 
@@ -138,56 +143,69 @@ impl<'a> AsmGenerator<'a> {
         .into()
     }
 
-    pub fn gen_global_variable(&mut self, name: &str, gv: &GlobalVariable) {
-        self.push_assembly(format!("{}:", self.with_prefix(name)));
-        self.gen_initializer_element(&gv.ty, gv.data.as_ref())
+    pub fn gen_global_variable(&self, name: &str, gv: &GlobalVariable) -> Assembly {
+        vec![
+            format!("{}:", self.with_prefix(name)).into(),
+            Self::gen_initializer_element(&gv.ty, gv.data.as_ref()),
+        ]
+        .into()
     }
 
-    pub fn gen_initializer_element(&mut self, ty: &Type, data: Option<&GlobalVariableData>) {
+    pub fn gen_initializer_element(ty: &Type, data: Option<&GlobalVariableData>) -> Assembly {
         match ty {
             Type::Arr(children_ty, size) => {
-                let mut rest_count = *size;
                 if let Some(GlobalVariableData::Arr(v)) = data {
-                    for (i, d) in v.iter().enumerate() {
-                        if i >= *size {
-                            break;
-                        }
-                        self.gen_initializer_element(children_ty.as_ref(), Some(d));
-                    }
-                    rest_count -= v.len();
+                    vec![
+                        v.iter()
+                            .enumerate()
+                            .filter(|(i, _)| i < size)
+                            .map(|(_, d)| {
+                                Self::gen_initializer_element(children_ty.as_ref(), Some(d))
+                            })
+                            .collect::<Vec<Assembly>>()
+                            .into(),
+                        format!(
+                            "  .zero {}",
+                            children_ty.size_of()
+                                * v.iter()
+                                    .enumerate()
+                                    .filter(|(i, _)| i < size)
+                                    .fold(*size, |_, _| { size - v.len() })
+                        )
+                        .into(),
+                    ]
+                    .into()
+                } else {
+                    format!("  .zero {}", children_ty.size_of() * *size).into()
                 }
-                self.push_assembly(format!("  .zero {}", children_ty.size_of() * rest_count));
             }
-            Type::I8 => {
-                self.push_assembly(format!(
-                    "  .byte {}",
-                    if let Some(GlobalVariableData::Elem(s)) = data {
-                        s
-                    } else {
-                        "0"
-                    }
-                ));
-            }
-            Type::I32 => {
-                self.push_assembly(format!(
-                    "  .4byte {}",
-                    if let Some(GlobalVariableData::Elem(s)) = data {
-                        s
-                    } else {
-                        "0"
-                    }
-                ));
-            }
-            _ => {
-                self.push_assembly(format!(
-                    "  .8byte {}",
-                    if let Some(GlobalVariableData::Elem(s)) = data {
-                        s
-                    } else {
-                        "0"
-                    }
-                ));
-            }
+            Type::I8 => format!(
+                "  .byte {}",
+                if let Some(GlobalVariableData::Elem(s)) = data {
+                    s
+                } else {
+                    "0"
+                }
+            )
+            .into(),
+            Type::I32 => format!(
+                "  .4byte {}",
+                if let Some(GlobalVariableData::Elem(s)) = data {
+                    s
+                } else {
+                    "0"
+                }
+            )
+            .into(),
+            _ => format!(
+                "  .8byte {}",
+                if let Some(GlobalVariableData::Elem(s)) = data {
+                    s
+                } else {
+                    "0"
+                }
+            )
+            .into(),
         }
     }
 
