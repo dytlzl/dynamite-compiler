@@ -1,11 +1,14 @@
+use crate::assembly::Assembly;
 use crate::ast::AstBuilder;
 use crate::ctype::Type;
 use crate::error;
 use crate::func::Func;
 use crate::global::{GlobalVariable, GlobalVariableData};
-use crate::instruction::InstOperand::{BeginFlag, ElseFlag, EndFlag, Ptr, PtrAdd};
-use crate::instruction::{Assembly, InstOperand, InstOperator, Instruction, Register};
-use crate::instruction::{InstOperator::*, Register::*};
+use crate::instruction::{
+    InstOperand::{self, *},
+    InstOperator::{self, *},
+    Register::{self, *},
+};
 use crate::node::{Node, NodeType};
 use std::fmt::Display;
 
@@ -44,17 +47,46 @@ impl<'a> AsmGenerator<'a> {
         }
     }
 
-    pub fn print(&self) {
-        self.assemblies.iter().for_each(|ass| {
-            println!(
-                "{}",
+    pub fn generate_string(&self) -> String {
+        self.assemblies
+            .iter()
+            .map(|ass| {
                 if let Os::MacOS = self.target_os {
                     ass.to_string()
                 } else {
                     ass.to_string4linux()
                 }
-            )
-        });
+            })
+            .collect::<Vec<String>>()
+            .join("\n")
+    }
+
+    pub fn generate_assemblies(&mut self) -> Vec<Assembly> {
+        vec![
+            ".intel_syntax noprefix".into(),
+            if let Os::MacOS = self.target_os {
+                ".section __TEXT,__text,regular,pure_instructions"
+            } else {
+                ".section .text"
+            }
+            .into(),
+            self.builder
+                .functions()
+                .iter()
+                .filter(|(_, func)| func.body.is_some())
+                .map(|(name, func)| {
+                    vec![
+                        format!(".globl {}", self.with_prefix(name)).into(),
+                        format!("{}:", self.with_prefix(name)).into(),
+                        Assembly::inst1(PUSH, RBP),
+                        Assembly::inst2(MOV, RBP, RSP),
+                        Assembly::inst2(SUB, RSP, func.offset_size),
+                    ]
+                    .into()
+                })
+                .collect::<Vec<Assembly>>()
+                .into(),
+        ]
     }
 
     pub fn gen(&mut self) {
@@ -173,9 +205,7 @@ impl<'a> AsmGenerator<'a> {
     }
 
     fn epilogue(&mut self) {
-        self.inst2(MOV, RSP, RBP);
-        self.inst1(POP, RBP);
-        self.inst0(RET);
+        self.assemblies.push(Assembly::epilogue());
     }
 
     fn gen_with_node(&mut self, node: &Node) {
@@ -508,34 +538,22 @@ impl<'a> AsmGenerator<'a> {
             }
         }
     }
-
     fn inst0(&mut self, operator: InstOperator) {
-        self.assemblies.push(Assembly::Inst(Instruction {
-            operator,
-            operand1: None,
-            operand2: None,
-        }))
+        self.assemblies.push(Assembly::inst0(operator))
     }
     fn inst1<T1>(&mut self, operator: InstOperator, operand1: T1)
     where
         T1: Into<InstOperand>,
     {
-        self.assemblies.push(Assembly::Inst(Instruction {
-            operator,
-            operand1: Some(operand1.into()),
-            operand2: None,
-        }))
+        self.assemblies.push(Assembly::inst1(operator, operand1))
     }
     fn inst2<T1, T2>(&mut self, operator: InstOperator, operand1: T1, operand2: T2)
     where
         T1: Into<InstOperand>,
         T2: Into<InstOperand>,
     {
-        self.assemblies.push(Assembly::Inst(Instruction {
-            operator,
-            operand1: Some(operand1.into()),
-            operand2: Some(operand2.into()),
-        }))
+        self.assemblies
+            .push(Assembly::inst2(operator, operand1, operand2))
     }
 
     fn push_assembly(&mut self, s: impl ToString) {

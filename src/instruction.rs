@@ -207,26 +207,3 @@ impl ToString for Instruction {
         res
     }
 }
-
-pub enum Assembly {
-    Inst(Instruction),
-    Other(String),
-}
-
-impl Assembly {
-    pub fn to_string4linux(&self) -> String {
-        match self {
-            Assembly::Inst(i) => i.to_string4linux(),
-            Assembly::Other(o) => o.clone(),
-        }
-    }
-}
-
-impl ToString for Assembly {
-    fn to_string(&self) -> String {
-        match self {
-            Assembly::Inst(i) => i.to_string(),
-            Assembly::Other(o) => o.clone(),
-        }
-    }
-}

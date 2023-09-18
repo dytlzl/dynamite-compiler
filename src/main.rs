@@ -1,7 +1,5 @@
-use dynamite_compiler::ast::AstBuilderImpl;
-use dynamite_compiler::error::{ErrorLogger, ErrorPrinter};
-use dynamite_compiler::generator::AsmGenerator;
-use dynamite_compiler::{generator::Os, tokenizer::Tokenizer};
+use dynamite_compiler::generator::Os;
+use dynamite_compiler::run;
 use getopts::Options;
 use std::env;
 use std::fs::File;
@@ -20,7 +18,6 @@ fn main() {
     let target_os = Os::MacOS;
     let args: Vec<String> = env::args().collect();
     let program = args[0].clone();
-
     let mut opts = Options::new();
     opts.optflag("", "debug", "print debug info");
     opts.optflag("h", "help", "print this help menu");
@@ -46,23 +43,5 @@ fn main() {
         .unwrap_or_else(|e| panic!("file \"{}\" not found: {}", path, e))
         .read_to_string(&mut code)
         .unwrap_or_else(|e| panic!("failed to read file \"{}\": {}", path, e));
-    let error_printer = ErrorPrinter::new(&code);
-    let tokens = Tokenizer::tokenize(&code).unwrap_or_else(|e| {
-        error_printer.print_syntax_error_position(e);
-        std::process::exit(1)
-    });
-    if is_debug {
-        Tokenizer::print_tokens(&tokens);
-    }
-    let mut builder = AstBuilderImpl::new(&error_printer, &tokens);
-    builder.build();
-    if is_debug {
-        builder.print_functions();
-    }
-    let mut generator = AsmGenerator::new(&builder, &error_printer, target_os);
-    generator.gen();
-    if is_debug {
-        return;
-    }
-    generator.print()
+    println!("{}", run(&code, target_os, is_debug));
 }
