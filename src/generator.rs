@@ -1,6 +1,6 @@
-use crate::ast::ASTBuilder;
+use crate::ast::AstBuilder;
 use crate::ctype::Type;
-use crate::error::{error, error_at};
+use crate::error;
 use crate::func::Func;
 use crate::global::{GlobalVariable, GlobalVariableData};
 use crate::instruction::InstOperand::{BeginFlag, ElseFlag, EndFlag, Ptr, PtrAdd};
@@ -10,11 +10,11 @@ use crate::node::{Node, NodeType};
 use std::fmt::Display;
 
 pub struct AsmGenerator<'a> {
-    code: &'a str,
+    error_logger: &'a dyn error::ErrorLogger,
     target_os: Os,
     branch_count: usize,
     loop_stack: Vec<usize>,
-    builder: &'a ASTBuilder<'a>,
+    builder: &'a dyn AstBuilder,
     current_stack_size: usize,
     pub assemblies: Vec<Assembly>,
 }
@@ -28,9 +28,13 @@ pub enum Os {
 const ARGS_REG: [Register; 6] = [RDI, RSI, RDX, RCX, R8, R9];
 
 impl<'a> AsmGenerator<'a> {
-    pub fn new(builder: &'a ASTBuilder<'a>, code: &'a str, target_os: Os) -> Self {
+    pub fn new(
+        builder: &'a dyn AstBuilder,
+        error_logger: &'a dyn error::ErrorLogger,
+        target_os: Os,
+    ) -> Self {
         Self {
-            code,
+            error_logger,
             target_os,
             builder,
             branch_count: 0,
@@ -40,6 +44,19 @@ impl<'a> AsmGenerator<'a> {
         }
     }
 
+    pub fn print(&self) {
+        self.assemblies.iter().for_each(|ass| {
+            println!(
+                "{}",
+                if let Os::MacOS = self.target_os {
+                    ass.to_string()
+                } else {
+                    ass.to_string4linux()
+                }
+            )
+        });
+    }
+
     pub fn gen(&mut self) {
         self.push_assembly(".intel_syntax noprefix");
         if let Os::MacOS = self.target_os {
@@ -47,7 +64,7 @@ impl<'a> AsmGenerator<'a> {
         } else {
             self.push_assembly(".section .text");
         }
-        for (s, f) in &self.builder.functions {
+        for (s, f) in self.builder.functions() {
             self.gen_func(s, f);
         }
         if let Os::MacOS = self.target_os {
@@ -55,20 +72,20 @@ impl<'a> AsmGenerator<'a> {
         } else {
             self.push_assembly(".section .data");
         }
-        for (s, gv) in &self.builder.global_variables {
+        for (s, gv) in self.builder.global_variables() {
             self.gen_global_variable(s, gv);
         }
         self.gen_string_literals();
     }
 
     pub fn gen_string_literals(&mut self) {
-        if !self.builder.string_literals.is_empty() {
+        if !self.builder.string_literals().is_empty() {
             if let Os::MacOS = self.target_os {
                 self.push_assembly(".section __TEXT,__cstring,cstring_literals");
             } else {
                 self.push_assembly(".section .data");
             }
-            for (i, str) in self.builder.string_literals.iter().enumerate() {
+            for (i, str) in self.builder.string_literals().iter().enumerate() {
                 self.push_assembly(format!("L_.str.{}:", i));
                 self.push_assembly(format!("  .asciz \"{}\"", str));
             }
@@ -145,7 +162,8 @@ impl<'a> AsmGenerator<'a> {
                 self.inst2(SUB, RAX, arg.offset.unwrap());
                 self.inst2(MOV, Ptr(RAX, 8), ARGS_REG[i]);
             } else {
-                error_at(self.code, arg.token.as_ref().unwrap().pos, "ident expected");
+                self.error_logger
+                    .print_error_position(arg.token.as_ref().unwrap().pos, "ident expected");
             }
         }
         self.current_stack_size = func.offset_size;
@@ -251,8 +269,7 @@ impl<'a> AsmGenerator<'a> {
                 if let Some(&branch_num) = self.loop_stack.last() {
                     self.inst1(JMP, EndFlag(branch_num));
                 } else {
-                    error_at(
-                        self.code,
+                    self.error_logger.print_error_position(
                         node.token.as_ref().unwrap().pos,
                         "unexpected break found",
                     );
@@ -425,7 +442,8 @@ impl<'a> AsmGenerator<'a> {
                 self.inst2(OR, RAX, RDI);
             }
             _ => {
-                error("unexpected node");
+                self.error_logger
+                    .print_error_position(node.token.as_ref().unwrap().pos, "unexpected node");
             }
         }
         self.inst1(PUSH, RAX);

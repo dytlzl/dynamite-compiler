@@ -1,5 +1,5 @@
 use crate::ctype::Type;
-use crate::error::error_at;
+use crate::error;
 use crate::func::Func;
 use crate::global::{GlobalVariable, GlobalVariableData};
 use crate::node::{Node, NodeType};
@@ -7,8 +7,8 @@ use crate::token::{Token, TokenType};
 use crate::tokenizer::TYPES;
 use std::collections::HashMap;
 
-pub struct ASTBuilder<'a> {
-    code: &'a str,
+pub struct AstBuilderImpl<'a> {
+    error_logger: &'a dyn error::ErrorLogger,
     tokens: &'a Vec<Token>,
     cur: usize,
     offset_size: usize,
@@ -24,10 +24,28 @@ pub enum Identifier {
     Static(Type),
 }
 
-impl<'a> ASTBuilder<'a> {
-    pub fn new(code: &'a str, tokens: &'a Vec<Token>) -> Self {
+pub trait AstBuilder {
+    fn functions(&self) -> &HashMap<String, Func>;
+    fn global_variables(&self) -> &HashMap<String, GlobalVariable>;
+    fn string_literals(&self) -> &Vec<String>;
+}
+
+impl AstBuilder for AstBuilderImpl<'_> {
+    fn functions(&self) -> &HashMap<String, Func> {
+        &self.functions
+    }
+    fn global_variables(&self) -> &HashMap<String, GlobalVariable> {
+        &self.global_variables
+    }
+    fn string_literals(&self) -> &Vec<String> {
+        &self.string_literals
+    }
+}
+
+impl<'a> AstBuilderImpl<'a> {
+    pub fn new(error_logger: &'a dyn error::ErrorLogger, tokens: &'a Vec<Token>) -> Self {
         let mut builder = Self {
-            code,
+            error_logger,
             tokens,
             cur: 0,
             offset_size: 0,
@@ -80,8 +98,7 @@ impl<'a> ASTBuilder<'a> {
                 return self.tokens[self.cur - 1].clone();
             }
         }
-        error_at(
-            self.code,
+        self.error_logger.print_error_position(
             self.tokens[self.cur].pos,
             &format!("`{}` expected", s_value),
         );
@@ -90,8 +107,7 @@ impl<'a> ASTBuilder<'a> {
     fn expect_number(&mut self) -> Token {
         if let TokenType::Num = self.tokens[self.cur].tt {
         } else {
-            error_at(
-                self.code,
+            self.error_logger.print_error_position(
                 self.tokens[self.cur].pos,
                 &format!(
                     "number expected, but got {}",
@@ -131,7 +147,8 @@ impl<'a> ASTBuilder<'a> {
             }
             (t, ty)
         } else {
-            error_at(self.code, self.tokens[self.cur].pos, "ident expected");
+            self.error_logger
+                .print_error_position(self.tokens[self.cur].pos, "ident expected");
             unreachable!();
         }
     }
@@ -145,7 +162,8 @@ impl<'a> ASTBuilder<'a> {
         };
         self.offset_size += segment_size - self.offset_size % segment_size;
         if self.scope_stack.last().unwrap().contains_key(&t.s_value) {
-            error_at(self.code, t.pos, "invalid redeclaration");
+            self.error_logger
+                .print_error_position(t.pos, "invalid redeclaration");
         }
         self.scope_stack.last_mut().unwrap().insert(
             t.s_value.clone(),
@@ -183,14 +201,15 @@ impl<'a> ASTBuilder<'a> {
         if *map.entry("char").or_default() == 1 {
             return Some(Type::I8);
         }
-        error_at(self.code, pos, "invalid type");
+        self.error_logger.print_error_position(pos, "invalid type");
         unreachable!();
     }
     fn expect_type(&mut self) -> Type {
         if let Some(ty) = self.attempt_type() {
             ty
         } else {
-            error_at(self.code, self.tokens[self.cur].pos, "type expected");
+            self.error_logger
+                .print_error_position(self.tokens[self.cur].pos, "type expected");
             unreachable!()
         }
     }
@@ -214,7 +233,8 @@ impl<'a> ASTBuilder<'a> {
                 self.expect_reserved(")");
             }
             if args.len() >= 7 {
-                error_at(self.code, t.pos, "count of args must be less than 7")
+                self.error_logger
+                    .print_error_position(t.pos, "count of args must be less than 7")
             }
             let arg_types: Vec<Type> = args
                 .iter()
@@ -331,8 +351,7 @@ impl<'a> ASTBuilder<'a> {
                 self.eval(node.lhs.as_ref().unwrap()) % self.eval(node.rhs.as_ref().unwrap())
             }
             _ => {
-                error_at(
-                    self.code,
+                self.error_logger.print_error_position(
                     node.token.as_ref().unwrap().pos,
                     "initializer element is not a compile-time constant",
                 );
@@ -814,11 +833,13 @@ impl<'a> ASTBuilder<'a> {
                     }
                 }
             } else {
-                error_at(self.code, t.pos, "undefined variable");
+                self.error_logger
+                    .print_error_position(t.pos, "undefined variable");
                 unreachable!();
             }
         } else {
-            error_at(self.code, self.tokens[self.cur].pos, "unexpected token");
+            self.error_logger
+                .print_error_position(self.tokens[self.cur].pos, "unexpected token");
             unreachable!();
         };
         loop {
@@ -838,7 +859,8 @@ impl<'a> ASTBuilder<'a> {
                         args.push(self.expr());
                     }
                     if args.len() >= 7 {
-                        error_at(self.code, t.pos, "count of args must be less than 7")
+                        self.error_logger
+                            .print_error_position(t.pos, "count of args must be less than 7")
                     }
                     // conforming to cdecl
                     // arguments are pushed onto the stack, from right to left

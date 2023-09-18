@@ -1,17 +1,17 @@
-use crate::error::error_at;
+use crate::error;
 use crate::token::{Token, TokenType};
 use crate::trie::Trie;
 use std::collections::HashSet;
 
-pub const RESERVED_WORDS: [&str; 7] = ["return", "if", "else", "while", "for", "break", "sizeof"];
 pub const TYPES: [&str; 2] = ["int", "char"];
-pub const RESERVED_SYMBOLS: [&str; 46] = [
+const RESERVED_WORDS: [&str; 7] = ["return", "if", "else", "while", "for", "break", "sizeof"];
+const RESERVED_SYMBOLS: [&str; 46] = [
     "=", "+", "-", "*", "/", "%", "<", ">", "==", "!=", "+=", "-=", "*=", "/=", "%=", "<=", ">=",
     "&", "^", "|", "&&", "||", "<<", ">>", "{", "}", "(", ")", "[", "]", ",", ";", "/*", "//",
     "\"", "!", "~", "?", ":", "<<=", ">>=", "&=", "^=", "|=", "++", "--",
 ];
 
-pub fn close_symbol(s: &str) -> Option<&str> {
+fn close_symbol(s: &str) -> Option<&str> {
     match s {
         "\"" => Some("\""),
         "//" => Some("\n"),
@@ -47,7 +47,7 @@ impl Tokenizer {
             ..Token::default()
         }
     }
-    pub fn tokenize(code: &str) -> Vec<Token> {
+    pub fn tokenize(code: &str) -> Result<Vec<Token>, error::SyntaxError> {
         let mut tokens = Vec::<Token>::new();
         let mut reserved_words = HashSet::new();
         for &word in &RESERVED_WORDS {
@@ -118,7 +118,7 @@ impl Tokenizer {
                                         if &code[pos..pos + match_size] == "//" {
                                             break;
                                         }
-                                        error_at(code, i, "unexpected EOF")
+                                        return Err(error::SyntaxError::new(i, "unexpected EOF"));
                                     }
                                     if code[chars[i].0..].starts_with(close_sym) {
                                         i += close_sym.len();
@@ -144,12 +144,12 @@ impl Tokenizer {
                             }
                         }
                     } else if i < chars.len() {
-                        error_at(code, pos, "unexpected character")
+                        return Err(error::SyntaxError::new(pos, "unexpected character"));
                     }
                 }
             }
         }
-        tokens
+        Ok(tokens)
     }
     pub fn print_tokens(tokens: &[Token]) {
         tokens.iter().for_each(|t| t.print())

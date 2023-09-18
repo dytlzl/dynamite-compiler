@@ -17,10 +17,17 @@ test-linux-arm64:
         -it rust:1.72.0 \
         make test linux=1
 
-src := ./temp/main.c
+src := ./test/expr.c
 
 compile:
-	cargo run $(if $(debug),debug,) $(src) > ./temp/main.s
+	cargo run -- $(if $(debug),--debug,) $(src) > ./temp/main.s
+
+compile-linux:
+	docker run --platform linux/amd64 --rm \
+        -v $(shell pwd):/workspace \
+        -w /workspace \
+        -it rust:1.72.0 \
+        make compile $(if $(debug),debug=1,)
 
 assemble:
 	cc $(if $(linux),-no-pie,) -o ./temp/main ./temp/main.s 
