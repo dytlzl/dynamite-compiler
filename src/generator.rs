@@ -107,21 +107,35 @@ impl<'a> AsmGenerator<'a> {
         for (s, gv) in self.builder.global_variables() {
             self.gen_global_variable(s, gv);
         }
-        self.gen_string_literals();
+        self.assemblies.push(self.gen_string_literals());
     }
 
-    pub fn gen_string_literals(&mut self) {
-        if !self.builder.string_literals().is_empty() {
-            if let Os::MacOS = self.target_os {
-                self.push_assembly(".section __TEXT,__cstring,cstring_literals");
-            } else {
-                self.push_assembly(".section .data");
-            }
-            for (i, str) in self.builder.string_literals().iter().enumerate() {
-                self.push_assembly(format!("L_.str.{}:", i));
-                self.push_assembly(format!("  .asciz \"{}\"", str));
-            }
+    pub fn gen_string_literals(&self) -> Assembly {
+        if self.builder.string_literals().is_empty() {
+            vec![]
+        } else {
+            vec![
+                if let Os::MacOS = self.target_os {
+                    ".section __TEXT,__cstring,cstring_literals".into()
+                } else {
+                    ".section .data".into()
+                },
+                self.builder
+                    .string_literals()
+                    .iter()
+                    .enumerate()
+                    .map(|(i, str)| {
+                        vec![
+                            format!("L_.str.{}:", i).into(),
+                            format!("  .asciz \"{}\"", str).into(),
+                        ]
+                        .into()
+                    })
+                    .collect::<Vec<Assembly>>()
+                    .into(),
+            ]
         }
+        .into()
     }
 
     pub fn gen_global_variable(&mut self, name: &str, gv: &GlobalVariable) {
