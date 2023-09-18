@@ -25,7 +25,7 @@ pub fn run(code: &str, target_os: generator::Os, is_debug: bool) -> String {
     if is_debug {
         builder.print_functions();
     }
-    let mut generator = generator::AsmGenerator::new(&builder, &error_printer, target_os);
-    generator.gen();
-    generator.generate_string()
+    generator::AsmGenerator::new(&builder, &error_printer, target_os)
+        .generate()
+        .to_string(target_os)
 }

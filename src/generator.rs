@@ -43,21 +43,7 @@ impl<'a> AsmGenerator<'a> {
         }
     }
 
-    pub fn generate_string(&self) -> String {
-        self.assemblies
-            .iter()
-            .map(|ass| {
-                if let Os::MacOS = self.target_os {
-                    ass.to_string()
-                } else {
-                    ass.to_string4linux()
-                }
-            })
-            .collect::<Vec<String>>()
-            .join("\n")
-    }
-
-    pub fn generate_assemblies(&mut self) -> Vec<Assembly> {
+    pub fn generate(&mut self) -> Assembly {
         vec![
             ".intel_syntax noprefix".into(),
             if let Os::MacOS = self.target_os {
@@ -69,57 +55,28 @@ impl<'a> AsmGenerator<'a> {
             self.builder
                 .functions()
                 .iter()
-                .filter(|(_, func)| func.body.is_some())
-                .map(|(name, func)| {
-                    vec![
-                        format!(".globl {}", self.with_prefix(name)).into(),
-                        format!("{}:", self.with_prefix(name)).into(),
-                        Assembly::inst1(PUSH, RBP),
-                        Assembly::inst2(MOV, RBP, RSP),
-                        Assembly::inst2(SUB, RSP, func.offset_size),
-                    ]
-                    .into()
+                .fold((0, vec![]), |(last_offset, mut last_vec), (name, f)| {
+                    let stack_offset = last_offset + f.offset_size;
+                    last_vec.push(self.gen_func(name, f, stack_offset));
+                    (stack_offset, last_vec)
                 })
+                .1
+                .into(),
+            if let Os::MacOS = self.target_os {
+                ".section __DATA,__data"
+            } else {
+                ".section .data"
+            }
+            .into(),
+            self.builder
+                .global_variables()
+                .iter()
+                .map(|(s, gv)| self.gen_global_variable(s, gv))
                 .collect::<Vec<Assembly>>()
                 .into(),
+            self.gen_string_literals(),
         ]
-    }
-
-    pub fn gen(&mut self) {
-        let (_, vec) = self.builder.functions().iter().fold(
-            (0, vec![]),
-            |(last_offset, mut last_vec), (name, f)| {
-                let stack_offset = last_offset + f.offset_size;
-                last_vec.push(self.gen_func(name, f, stack_offset));
-                (stack_offset, last_vec)
-            },
-        );
-        self.assemblies.push(
-            vec![
-                ".intel_syntax noprefix".into(),
-                if let Os::MacOS = self.target_os {
-                    ".section __TEXT,__text,regular,pure_instructions"
-                } else {
-                    ".section .text"
-                }
-                .into(),
-                vec.into(),
-                if let Os::MacOS = self.target_os {
-                    ".section __DATA,__data"
-                } else {
-                    ".section .data"
-                }
-                .into(),
-                self.builder
-                    .global_variables()
-                    .iter()
-                    .map(|(s, gv)| self.gen_global_variable(s, gv))
-                    .collect::<Vec<Assembly>>()
-                    .into(),
-                self.gen_string_literals(),
-            ]
-            .into(),
-        )
+        .into()
     }
 
     pub fn gen_string_literals(&self) -> Assembly {
@@ -325,21 +282,20 @@ impl<'a> AsmGenerator<'a> {
                 self.loop_stack.push(branch_num);
                 let v = vec![
                     node.ini.as_ref().map_or(Vec::new().into(), |node| {
-                        vec![self.gen_with_node(&node, offset), Assembly::inst1(POP, RAX)].into()
+                        vec![self.gen_with_node(node, offset), Assembly::inst1(POP, RAX)].into()
                     }),
                     format!("{}:", BeginFlag(branch_num)).into(),
                     Assembly::reset_stack(offset),
                     node.cond
                         .as_ref()
                         .map_or(Assembly::inst2(MOV, RAX, 1), |node| {
-                            vec![self.gen_with_node(&node, offset), Assembly::inst1(POP, RAX)]
-                                .into()
+                            vec![self.gen_with_node(node, offset), Assembly::inst1(POP, RAX)].into()
                         }),
                     Assembly::inst2(CMP, RAX, 0),
                     Assembly::inst1(JE, EndFlag(branch_num)),
                     self.gen_with_node(node.then.as_ref().unwrap(), offset),
                     node.upd.as_ref().map_or(Vec::new().into(), |node| {
-                        vec![self.gen_with_node(&node, offset), Assembly::inst1(POP, RAX)].into()
+                        vec![self.gen_with_node(node, offset), Assembly::inst1(POP, RAX)].into()
                     }),
                     Assembly::inst1(JMP, BeginFlag(branch_num)),
                     format!("{}:", EndFlag(branch_num)).into(),
@@ -499,7 +455,7 @@ impl<'a> AsmGenerator<'a> {
             }
             _ => {}
         }
-        return vec![
+        vec![
             self.gen_with_node(node.rhs.as_ref().unwrap(), offset),
             self.gen_with_node(node.lhs.as_ref().unwrap(), offset),
             Assembly::inst1(POP, RAX),
@@ -557,10 +513,10 @@ impl<'a> AsmGenerator<'a> {
             },
             Assembly::inst1(PUSH, RAX),
         ]
-        .into();
+        .into()
     }
 
-    fn gen_with_vec(&mut self, v: &Vec<Node>, offset: usize) -> Assembly {
+    fn gen_with_vec(&mut self, v: &[Node], offset: usize) -> Assembly {
         v.iter()
             .map(|node| {
                 vec![

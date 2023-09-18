@@ -33,7 +33,10 @@ use std::fmt::{Debug, Display, Error, Formatter};
 use InstOperator::*;
 
 impl InstOperator {
-    pub fn to_string(&self) -> &str {
+    pub fn to_string(&self, target_os: Os) -> &str {
+        if matches!(target_os, Os::Linux) && matches!(self, MOVZX) {
+            return "movzb";
+        }
         match self {
             PUSH => "push",
             POP => "pop",
@@ -65,12 +68,6 @@ impl InstOperator {
             XOR => "xor",
         }
     }
-    pub fn to_string4linux(&self) -> &str {
-        match self {
-            MOVZX => "movzb",
-            _ => self.to_string(),
-        }
-    }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -92,6 +89,8 @@ pub enum Register {
     R9,
 }
 use Register::*;
+
+use crate::generator::Os;
 
 impl Display for Register {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
@@ -179,23 +178,8 @@ pub struct Instruction {
     pub operand2: Option<InstOperand>,
 }
 impl Instruction {
-    pub fn to_string4linux(&self) -> String {
-        let mut res = format!("  {}", self.operator.to_string4linux());
-        if self.operand1.is_some() {
-            res += " ";
-            res += &self.operand1.as_ref().unwrap().to_string()[..]
-        }
-        if self.operand2.is_some() {
-            res += ", ";
-            res += &self.operand2.as_ref().unwrap().to_string()[..]
-        }
-        res
-    }
-}
-
-impl ToString for Instruction {
-    fn to_string(&self) -> String {
-        let mut res = format!("  {}", self.operator.to_string());
+    pub fn to_string(&self, target_os: Os) -> String {
+        let mut res = format!("  {}", self.operator.to_string(target_os));
         if self.operand1.is_some() {
             res += " ";
             res += &self.operand1.as_ref().unwrap().to_string()[..]

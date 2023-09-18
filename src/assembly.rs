@@ -1,8 +1,11 @@
-use crate::instruction::{
-    InstOperand,
-    InstOperator::{self, *},
-    Instruction,
-    Register::*,
+use crate::{
+    generator::Os,
+    instruction::{
+        InstOperand,
+        InstOperator::{self, *},
+        Instruction,
+        Register::*,
+    },
 };
 
 pub enum Assembly {
@@ -38,7 +41,7 @@ impl From<Vec<Assembly>> for Assembly {
 impl Assembly {
     fn is_empty(&self) -> bool {
         match self {
-            Assembly::Group(v) => return v.is_empty(),
+            Assembly::Group(v) => v.is_empty(),
             _ => false,
         }
     }
@@ -84,29 +87,14 @@ impl Assembly {
             Assembly::inst0(RET),
         ])
     }
-    pub fn to_string4linux(&self) -> String {
+    pub fn to_string(&self, target_os: Os) -> String {
         match self {
-            Assembly::Inst(i) => i.to_string4linux(),
-            Assembly::Other(o) => o.clone(),
-            Assembly::Group(g) => g
-                .iter()
-                .filter(|a| !a.is_empty())
-                .map(|a| a.to_string4linux())
-                .collect::<Vec<String>>()
-                .join("\n"),
-        }
-    }
-}
-
-impl ToString for Assembly {
-    fn to_string(&self) -> String {
-        match self {
-            Assembly::Inst(i) => i.to_string(),
+            Assembly::Inst(i) => i.to_string(target_os),
             Assembly::Other(o) => o.clone(),
             Assembly::Group(b) => b
                 .iter()
                 .filter(|a| !a.is_empty())
-                .map(|a| a.to_string())
+                .map(|a| a.to_string(target_os))
                 .collect::<Vec<String>>()
                 .join("\n"),
         }
