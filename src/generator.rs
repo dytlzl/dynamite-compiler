@@ -285,7 +285,8 @@ impl<'a> AsmGenerator<'a> {
                 let branch_num = self.new_branch_num();
                 self.loop_stack.push(branch_num);
                 self.push_assembly(format!("{}:", BeginFlag(branch_num)));
-                self.reset_stack();
+                self.assemblies
+                    .push(Assembly::reset_stack(self.current_stack_size));
                 self.gen_with_node(node.cond.as_ref().unwrap());
                 self.inst1(POP, RAX);
                 self.inst2(CMP, RAX, 0);
@@ -304,7 +305,8 @@ impl<'a> AsmGenerator<'a> {
                     self.inst1(POP, RAX);
                 }
                 self.push_assembly(format!("{}:", BeginFlag(branch_num)));
-                self.reset_stack();
+                self.assemblies
+                    .push(Assembly::reset_stack(self.current_stack_size));
                 if node.cond.is_some() {
                     self.gen_with_node(node.cond.as_ref().unwrap());
                     self.inst1(POP, RAX);
@@ -515,7 +517,8 @@ impl<'a> AsmGenerator<'a> {
         for node in v {
             self.gen_with_node(node);
             self.inst1(POP, RAX);
-            self.reset_stack();
+            self.assemblies
+                .push(Assembly::reset_stack(self.current_stack_size));
         }
     }
 
@@ -607,10 +610,5 @@ impl<'a> AsmGenerator<'a> {
     fn new_branch_num(&mut self) -> usize {
         self.branch_count += 1;
         self.branch_count
-    }
-
-    fn reset_stack(&mut self) {
-        self.inst2(MOV, RSP, RBP);
-        self.inst2(SUB, RSP, self.current_stack_size);
     }
 }
