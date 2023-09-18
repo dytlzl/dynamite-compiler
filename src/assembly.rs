@@ -36,6 +36,12 @@ impl From<Vec<Assembly>> for Assembly {
 }
 
 impl Assembly {
+    fn is_empty(&self) -> bool {
+        match self {
+            Assembly::Group(v) => return v.is_empty(),
+            _ => false,
+        }
+    }
     pub fn inst0(operator: InstOperator) -> Assembly {
         Assembly::Inst(Instruction {
             operator,
@@ -84,6 +90,7 @@ impl Assembly {
             Assembly::Other(o) => o.clone(),
             Assembly::Group(g) => g
                 .iter()
+                .filter(|a| !a.is_empty())
                 .map(|a| a.to_string4linux())
                 .collect::<Vec<String>>()
                 .join("\n"),
@@ -98,6 +105,7 @@ impl ToString for Assembly {
             Assembly::Other(o) => o.clone(),
             Assembly::Group(b) => b
                 .iter()
+                .filter(|a| !a.is_empty())
                 .map(|a| a.to_string())
                 .collect::<Vec<String>>()
                 .join("\n"),
