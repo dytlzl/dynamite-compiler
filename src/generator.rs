@@ -269,7 +269,6 @@ impl<'a> AsmGenerator<'a> {
                     Assembly::inst1(PUSH, RDX),
                     node.args
                         .iter()
-                        .rev()
                         .map(|node| self.gen_with_node(node, offset))
                         .collect::<Vec<Assembly>>()
                         .into(),
