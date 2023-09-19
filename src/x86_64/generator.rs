@@ -1,15 +1,16 @@
-use crate::assembly::Assembly;
 use crate::ast::AstBuilder;
 use crate::ctype::Type;
 use crate::error;
 use crate::func::Func;
 use crate::global::{GlobalVariable, GlobalVariableData};
-use crate::instruction::{
+use crate::node::{Node, NodeType};
+use crate::x86_64::assembly::Assembly;
+use crate::x86_64::instruction::{
     InstOperand::*,
     InstOperator::{self, *},
     Register::{self, *},
 };
-use crate::node::{Node, NodeType};
+use crate::Os;
 use std::fmt::Display;
 
 pub struct AsmGenerator<'a> {
@@ -18,12 +19,6 @@ pub struct AsmGenerator<'a> {
     loop_stack: Vec<usize>,
     builder: &'a dyn AstBuilder,
     pub assemblies: Vec<Assembly>,
-}
-
-#[derive(Clone, Copy)]
-pub enum Os {
-    Linux,
-    MacOS,
 }
 
 const ARGS_REG: [Register; 6] = [RDI, RSI, RDX, RCX, R8, R9];

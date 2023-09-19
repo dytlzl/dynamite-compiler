@@ -1,12 +1,10 @@
-use crate::{
-    generator::Os,
-    instruction::{
-        InstOperand,
-        InstOperator::{self, *},
-        Instruction,
-        Register::*,
-    },
+use crate::x86_64::instruction::{
+    InstOperand,
+    InstOperator::{self, *},
+    Instruction,
+    Register::*,
 };
+use crate::Os;
 
 pub enum Assembly {
     Inst(Instruction),

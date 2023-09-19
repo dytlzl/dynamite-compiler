@@ -1,3 +1,5 @@
+use crate::Os;
+
 pub enum InstOperator {
     PUSH,
     POP,
@@ -89,8 +91,6 @@ pub enum Register {
     R9,
 }
 use Register::*;
-
-use crate::generator::Os;
 
 impl Display for Register {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
