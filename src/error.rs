@@ -76,3 +76,10 @@ impl ErrorLogger for ErrorPrinter<'_> {
         std::process::exit(1);
     }
 }
+#[derive(Default)]
+pub struct NopLogger {}
+
+impl ErrorLogger for NopLogger {
+    fn print_syntax_error_position(&self, _: SyntaxError) {}
+    fn print_error_position(&self, _: usize, _: &str) {}
+}

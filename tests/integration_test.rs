@@ -1,0 +1,77 @@
+use std::{
+    fs::{self, remove_file},
+    io::Write,
+    process::Command,
+};
+
+use dynamite_compiler::{Arch, Os};
+
+extern crate dynamite_compiler;
+
+extern crate rand;
+
+use rand::distributions::{Alphanumeric, DistString};
+
+#[test]
+fn it_defines_one_global_variable() {
+    let code = "int a = 7; int main() { printf(\"%d\", a); return 0; }";
+    let got = compile_and_get_stdout(code);
+    assert_eq!(got, "7")
+}
+
+#[test]
+fn it_compiles_string_c() {
+    let code = &fs::read_to_string("./tests/c/string.c").unwrap();
+    let got = compile_and_get_stdout(code);
+    assert_eq!(got, "a = 777, b = 755, c = 222\n")
+}
+
+#[test]
+fn it_compiles_expr_c() {
+    let code = &fs::read_to_string("./tests/c/expr.c").unwrap();
+    let got = compile_and_get_stdout(code);
+    got.split("\n")
+        .filter(|s| !s.is_empty() && !s.ends_with("OK"))
+        .for_each(|s| panic!("assertion failed:\n  {}\n", s));
+}
+
+#[test]
+fn it_compiles_many_functions_c() {
+    let code = &fs::read_to_string("./tests/c/many_functions.c").unwrap();
+    let got = compile_and_get_stdout(code);
+    got.split("\n")
+        .filter(|s| !s.is_empty() && !s.ends_with("OK"))
+        .for_each(|s| panic!("assertion failed:\n  {}\n", s));
+}
+
+fn compile_and_get_stdout(code: &str) -> String {
+    #[cfg(target_os = "linux")]
+    let target_os = Os::Linux;
+    #[cfg(target_os = "macos")]
+    let target_os = Os::MacOS;
+    #[cfg(target_arch = "x86_64")]
+    let target_arch = Arch::X86_64;
+    #[cfg(target_arch = "aarch64")]
+    let target_arch = Arch::Aarch64;
+    let assembly = dynamite_compiler::run(code, target_arch, target_os, false);
+    let mut rng = rand::thread_rng();
+    fs::create_dir_all("./tests/temp").unwrap();
+    let binary_name = &format!("./tests/temp/{}", Alphanumeric.sample_string(&mut rng, 32));
+    let mut child = Command::new("cc")
+        .args(["-x", "assembler", "-o", binary_name, "-"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    if let Some(mut stdin) = child.stdin.as_ref() {
+        stdin.write_all(assembly.as_bytes()).unwrap();
+    } else {
+        eprintln!("Failed to open stdin");
+    }
+    let _ = child.wait().unwrap();
+    let output = Command::new(binary_name).output().unwrap();
+    let got = String::from_utf8_lossy(&output.stdout);
+    remove_file(binary_name).unwrap();
+    String::from(got)
+}

@@ -915,3 +915,62 @@ impl<'a> AstBuilderImpl<'a> {
             })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::error::NopLogger;
+
+    use super::*;
+
+    #[test]
+    fn test_ast_builder() {
+        let error_logger = NopLogger::default();
+        let tokens = &vec![
+            Token {
+                tt: TokenType::Reserved,
+                pos: 0,
+                s_value: "int".to_string(),
+                i_value: 0,
+            },
+            Token {
+                tt: TokenType::Ident,
+                pos: 0,
+                i_value: 0,
+                s_value: "x".to_string(),
+            },
+            Token {
+                tt: TokenType::Reserved,
+                pos: 0,
+                i_value: 0,
+                s_value: "=".to_string(),
+            },
+            Token {
+                tt: TokenType::Num,
+                pos: 0,
+                i_value: 42,
+                s_value: String::new(),
+            },
+            Token {
+                tt: TokenType::Reserved,
+                pos: 0,
+                i_value: 0,
+                s_value: ";".to_string(),
+            },
+        ];
+        let mut ast_builder = AstBuilderImpl::new(&error_logger, tokens);
+        let program_ast = ast_builder.build(false);
+        assert_eq!(program_ast.functions.len(), 0);
+        assert_eq!(*program_ast.global_variables, {
+            let mut map = HashMap::new();
+            map.insert(
+                "x".to_string(),
+                GlobalVariable {
+                    ty: Type::I32,
+                    data: Some(GlobalVariableData::Elem("42".to_string())),
+                },
+            );
+            map
+        });
+        assert_eq!(program_ast.string_literals.len(), 0);
+    }
+}

@@ -9,3 +9,4 @@ default-run = "dynamite_compiler"
 
 [dependencies]
 getopts = "0.2"
+rand = "0.8.5"
