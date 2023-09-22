@@ -1,7 +1,10 @@
 docker_image := rust:1.72.0
+test_options := --target x86_64-apple-darwin
 
-test:
-	cargo test --target x86_64-apple-darwin
+ci:
+	cargo fmt
+	cargo clippy
+	cargo test $(test_options)
 
 test-linux:
 	docker run --platform linux/amd64 --rm \
@@ -15,4 +18,4 @@ test-linux-aarch64:
         -v $(shell pwd):/workspace \
         -w /workspace \
         -it $(docker_image)  \
-        make test linux=1
+        cargo test
