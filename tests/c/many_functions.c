@@ -1,3 +1,6 @@
+#include <stdlib.h>
+#include <stdio.h>
+
 int n = 0;
 
 int assert(int expected, int actual) {
@@ -178,7 +181,7 @@ int test21() {
 int test22() {
     int a[3];
     a[0] = 8;
-    a[3] = 9;
+    a[2] = 9;
     return a[0];
 }
 
@@ -248,13 +251,6 @@ int test31() {
     return s;
 }
 
-int test32() {
-    int r = 1200;
-    int s = 299;
-    s *= s %= 39; // Undefined Behavior
-    r /= 2;
-    return s - r;
-}
 int test32() {
     int r = 1200;
     int s = 299;
@@ -336,7 +332,7 @@ int main() {
     assert(10, test13());
     assert(50, test14());
     assert(3, test15());
-    assert(4, test16());
+    //assert(4, test16()); // sizeof(sizeof(1)) is machine dependent
     assert(4, test17());
     assert(8, test18());
     assert(4, test19());

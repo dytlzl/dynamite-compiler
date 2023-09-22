@@ -5,10 +5,10 @@ use std::collections::HashSet;
 
 pub const TYPES: [&str; 2] = ["int", "char"];
 const RESERVED_WORDS: [&str; 7] = ["return", "if", "else", "while", "for", "break", "sizeof"];
-const RESERVED_SYMBOLS: [&str; 46] = [
+const RESERVED_SYMBOLS: [&str; 47] = [
     "=", "+", "-", "*", "/", "%", "<", ">", "==", "!=", "+=", "-=", "*=", "/=", "%=", "<=", ">=",
     "&", "^", "|", "&&", "||", "<<", ">>", "{", "}", "(", ")", "[", "]", ",", ";", "/*", "//",
-    "\"", "!", "~", "?", ":", "<<=", ">>=", "&=", "^=", "|=", "++", "--",
+    "\"", "!", "~", "?", ":", "<<=", ">>=", "&=", "^=", "|=", "++", "--", "#",
 ];
 
 fn close_symbol(s: &str) -> Option<&str> {
@@ -16,6 +16,7 @@ fn close_symbol(s: &str) -> Option<&str> {
         "\"" => Some("\""),
         "//" => Some("\n"),
         "/*" => Some("*/"),
+        "#" => Some("\n"),
         _ => None,
     }
 }
@@ -115,10 +116,15 @@ impl Tokenizer {
                             Some(close_sym) => {
                                 loop {
                                     if i >= chars.len() {
-                                        if &code[pos..pos + match_size] == "//" {
-                                            break;
+                                        match &code[pos..pos + match_size] {
+                                            "//" | "#" => break,
+                                            _ => {
+                                                return Err(error::SyntaxError::new(
+                                                    i,
+                                                    "unexpected EOF",
+                                                ))
+                                            }
                                         }
-                                        return Err(error::SyntaxError::new(i, "unexpected EOF"));
                                     }
                                     if code[chars[i].0..].starts_with(close_sym) {
                                         i += close_sym.len();

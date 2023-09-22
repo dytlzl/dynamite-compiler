@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 int value;
 char *fmt2;
 

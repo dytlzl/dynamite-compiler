@@ -1,3 +1,6 @@
+#include <stdlib.h>
+#include <stdio.h>
+
 int n = 0;
 
 int assert(int expected, int actual) {
