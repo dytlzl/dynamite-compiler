@@ -85,18 +85,6 @@ impl Assembly {
             Assembly::inst0(RET),
         ])
     }
-    pub fn to_string(&self, target_os: Os) -> String {
-        match self {
-            Assembly::Inst(i) => i.to_string(target_os),
-            Assembly::Other(o) => o.clone(),
-            Assembly::Group(b) => b
-                .iter()
-                .filter(|a| !a.is_empty())
-                .map(|a| a.to_string(target_os))
-                .collect::<Vec<String>>()
-                .join("\n"),
-        }
-    }
 }
 
 impl crate::generator::Assembly for Assembly {
