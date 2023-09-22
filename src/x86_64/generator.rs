@@ -1,4 +1,4 @@
-use crate::ast::AstBuilder;
+use crate::ast::ProgramAst;
 use crate::ctype::Type;
 use crate::error;
 use crate::func::Func;
@@ -17,65 +17,65 @@ pub struct AsmGenerator<'a> {
     error_logger: &'a dyn error::ErrorLogger,
     target_os: Os,
     loop_stack: Vec<usize>,
-    builder: &'a dyn AstBuilder,
     pub assemblies: Vec<Assembly>,
 }
 
 const ARGS_REG: [Register; 6] = [RDI, RSI, RDX, RCX, R8, R9];
 
+impl<'a> crate::generator::Generator for AsmGenerator<'a> {
+    fn generate(&mut self, ast: ProgramAst) -> Box<dyn crate::generator::Assembly> {
+        self.generate(ast)
+    }
+}
+
 impl<'a> AsmGenerator<'a> {
-    pub fn new(
-        builder: &'a dyn AstBuilder,
-        error_logger: &'a dyn error::ErrorLogger,
-        target_os: Os,
-    ) -> Self {
+    pub fn new(error_logger: &'a dyn error::ErrorLogger, target_os: Os) -> Self {
         Self {
             error_logger,
             target_os,
-            builder,
             loop_stack: Vec::new(),
             assemblies: Vec::new(),
         }
     }
 
-    pub fn generate(&mut self) -> Assembly {
-        vec![
-            ".intel_syntax noprefix".into(),
-            if let Os::MacOS = self.target_os {
-                ".section __TEXT,__text,regular,pure_instructions"
-            } else {
-                ".section .text"
-            }
-            .into(),
-            self.builder
-                .functions()
-                .iter()
-                .fold((0, vec![]), |(last_offset, mut last_vec), (name, f)| {
-                    let stack_offset = last_offset + f.offset_size;
-                    last_vec.push(self.gen_func(name, f, stack_offset));
-                    (stack_offset, last_vec)
-                })
-                .1
+    fn generate(&mut self, ast: ProgramAst) -> Box<dyn crate::generator::Assembly> {
+        Box::<Assembly>::new(
+            vec![
+                ".intel_syntax noprefix".into(),
+                if let Os::MacOS = self.target_os {
+                    ".section __TEXT,__text,regular,pure_instructions"
+                } else {
+                    ".section .text"
+                }
                 .into(),
-            if let Os::MacOS = self.target_os {
-                ".section __DATA,__data"
-            } else {
-                ".section .data"
-            }
-            .into(),
-            self.builder
-                .global_variables()
-                .iter()
-                .map(|(s, gv)| self.gen_global_variable(s, gv))
-                .collect::<Vec<Assembly>>()
+                ast.functions
+                    .iter()
+                    .fold((0, vec![]), |(last_offset, mut last_vec), (name, f)| {
+                        let stack_offset = last_offset + f.offset_size;
+                        last_vec.push(self.gen_func(name, f, stack_offset));
+                        (stack_offset, last_vec)
+                    })
+                    .1
+                    .into(),
+                if let Os::MacOS = self.target_os {
+                    ".section __DATA,__data"
+                } else {
+                    ".section .data"
+                }
                 .into(),
-            self.gen_string_literals(),
-        ]
-        .into()
+                ast.global_variables
+                    .iter()
+                    .map(|(s, gv)| self.gen_global_variable(s, gv))
+                    .collect::<Vec<Assembly>>()
+                    .into(),
+                self.gen_string_literals(ast.string_literals),
+            ]
+            .into(),
+        )
     }
 
-    pub fn gen_string_literals(&self) -> Assembly {
-        if self.builder.string_literals().is_empty() {
+    fn gen_string_literals(&self, string_literals: &Vec<String>) -> Assembly {
+        if string_literals.is_empty() {
             vec![]
         } else {
             vec![
@@ -84,8 +84,7 @@ impl<'a> AsmGenerator<'a> {
                 } else {
                     ".section .data".into()
                 },
-                self.builder
-                    .string_literals()
+                string_literals
                     .iter()
                     .enumerate()
                     .map(|(i, str)| {
@@ -102,7 +101,7 @@ impl<'a> AsmGenerator<'a> {
         .into()
     }
 
-    pub fn gen_global_variable(&self, name: &str, gv: &GlobalVariable) -> Assembly {
+    fn gen_global_variable(&self, name: &str, gv: &GlobalVariable) -> Assembly {
         vec![
             format!("{}:", self.with_prefix(name)).into(),
             Self::gen_initializer_element(&gv.ty, gv.data.as_ref()),
@@ -110,7 +109,7 @@ impl<'a> AsmGenerator<'a> {
         .into()
     }
 
-    pub fn gen_initializer_element(ty: &Type, data: Option<&GlobalVariableData>) -> Assembly {
+    fn gen_initializer_element(ty: &Type, data: Option<&GlobalVariableData>) -> Assembly {
         match ty {
             Type::Arr(children_ty, size) => {
                 if let Some(GlobalVariableData::Arr(v)) = data {
@@ -168,7 +167,7 @@ impl<'a> AsmGenerator<'a> {
         }
     }
 
-    pub fn gen_func(&mut self, name: &str, func: &Func, offset: usize) -> Assembly {
+    fn gen_func(&mut self, name: &str, func: &Func, offset: usize) -> Assembly {
         if func.body.is_none() {
             return vec![].into();
         }

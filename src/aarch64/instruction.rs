@@ -7,7 +7,8 @@ pub enum InstOperator {
     ADD,
     SUB,
     RET,
-    CALL,
+    BL,
+    SVC,
     CQO,
     JMP,
     JE,
@@ -46,8 +47,9 @@ impl InstOperator {
             ADD => "add",
             SUB => "sub",
             RET => "ret",
-            CALL => "call",
+            BL => "bl",
             CQO => "cqo",
+            SVC => "svc",
             JMP => "jmp",
             JE => "je",
             JNE => "jne",
@@ -74,16 +76,16 @@ impl InstOperator {
 
 #[derive(Copy, Clone, Debug)]
 pub enum Register {
-    RAX,
-    RBX,
-    RCX,
-    RDX,
-    RSI,
-    RDI,
-    RBP,
-    RSP,
-    EDI,
-    DIL,
+    X8,
+    X9,
+    X10,
+    X11,
+    X12,
+    X13,
+    X14,
+    X15,
+    X16,
+    X17,
     AL,
     CL,
     RIP,
@@ -95,16 +97,16 @@ use Register::*;
 impl Display for Register {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         f.write_str(match self {
-            RAX => "rax",
-            RBX => "rbx",
-            RCX => "rcx",
-            RDX => "rdx",
-            RSI => "rsi",
-            RDI => "rdi",
-            RBP => "rbp",
-            RSP => "rsp",
-            EDI => "edi",
-            DIL => "dil",
+            X8 => "x8",
+            X9 => "x9",
+            X10 => "x10",
+            X11 => "x11",
+            X12 => "x12",
+            X13 => "x13",
+            X14 => "x14",
+            X15 => "x15",
+            X16 => "x16",
+            X17 => "dil",
             AL => "al",
             CL => "cl",
             RIP => "rip",
@@ -131,15 +133,10 @@ impl Display for InstOperand {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         f.write_str(&match self {
             InstOperand::Reg(r) => format!("{}", r),
-            InstOperand::Num(i) => format!("{}", i),
+            InstOperand::Num(i) => format!("#{}", i),
             InstOperand::Label(l) => l.clone(),
             InstOperand::Str(s) => String::from(*s),
-            InstOperand::Ptr(r, i) => match i {
-                1 => format!("byte ptr[{}]", r),
-                4 => format!("dword ptr[{}]", r),
-                8 => format!("qword ptr[{}]", r),
-                _ => unreachable!(),
-            },
+            InstOperand::Ptr(r, _) => format!("[{}]", r),
             InstOperand::ElseFlag(i) => format!(".Lelse{}", i),
             InstOperand::BeginFlag(i) => format!(".Lbegin{}", i),
             InstOperand::EndFlag(i) => format!(".Lend{}", i),
@@ -176,18 +173,34 @@ pub struct Instruction {
     pub operator: InstOperator,
     pub operand1: Option<InstOperand>,
     pub operand2: Option<InstOperand>,
+    pub operand3: Option<InstOperand>,
 }
 impl Instruction {
     pub fn to_string(&self, target_os: Os) -> String {
-        let mut res = format!("  {}", self.operator.to_string(target_os));
-        if self.operand1.is_some() {
-            res += " ";
-            res += &self.operand1.as_ref().unwrap().to_string()[..]
+        if self.operand3.is_some() {
+            return format!(
+                "  {} {}, {}, {}",
+                self.operator.to_string(target_os),
+                &self.operand1.as_ref().unwrap().to_string()[..],
+                &self.operand2.as_ref().unwrap().to_string()[..],
+                &self.operand3.as_ref().unwrap().to_string()[..]
+            );
         }
         if self.operand2.is_some() {
-            res += ", ";
-            res += &self.operand2.as_ref().unwrap().to_string()[..]
+            return format!(
+                "  {} {}, {}",
+                self.operator.to_string(target_os),
+                &self.operand1.as_ref().unwrap().to_string()[..],
+                &self.operand2.as_ref().unwrap().to_string()[..]
+            );
         }
-        res
+        if self.operand1.is_some() {
+            return format!(
+                "  {} {}",
+                self.operator.to_string(target_os),
+                &self.operand1.as_ref().unwrap().to_string()[..],
+            );
+        }
+        format!("  {}", self.operator.to_string(target_os))
     }
 }

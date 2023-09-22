@@ -18,6 +18,12 @@ pub struct AstBuilderImpl<'a> {
     pub string_literals: Vec<String>,
 }
 
+pub struct ProgramAst<'a> {
+    pub functions: &'a HashMap<String, Func>,
+    pub global_variables: &'a HashMap<String, GlobalVariable>,
+    pub string_literals: &'a Vec<String>,
+}
+
 pub enum Identifier {
     TypeDef(Type),
     Local(Type, usize),
@@ -25,20 +31,22 @@ pub enum Identifier {
 }
 
 pub trait AstBuilder {
-    fn functions(&self) -> &HashMap<String, Func>;
-    fn global_variables(&self) -> &HashMap<String, GlobalVariable>;
-    fn string_literals(&self) -> &Vec<String>;
+    fn build(&mut self, is_debug: bool) -> ProgramAst;
 }
 
 impl AstBuilder for AstBuilderImpl<'_> {
-    fn functions(&self) -> &HashMap<String, Func> {
-        &self.functions
-    }
-    fn global_variables(&self) -> &HashMap<String, GlobalVariable> {
-        &self.global_variables
-    }
-    fn string_literals(&self) -> &Vec<String> {
-        &self.string_literals
+    fn build(&mut self, is_debug: bool) -> ProgramAst {
+        while !self.at_eof() {
+            self.global_definition()
+        }
+        if is_debug {
+            self.print_functions();
+        }
+        ProgramAst {
+            functions: &self.functions,
+            global_variables: &self.global_variables,
+            string_literals: &self.string_literals,
+        }
     }
 }
 
@@ -128,11 +136,6 @@ impl<'a> AstBuilderImpl<'a> {
     }
     fn at_eof(&self) -> bool {
         self.cur >= self.tokens.len()
-    }
-    pub fn build(&mut self) {
-        while !self.at_eof() {
-            self.global_definition()
-        }
     }
     fn expect_ident_with_type(&mut self, ty: Type) -> (Token, Type) {
         let mut ty = ty.clone();

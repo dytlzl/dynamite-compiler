@@ -47,7 +47,7 @@ impl Tokenizer {
             ..Token::default()
         }
     }
-    pub fn tokenize(code: &str) -> Result<Vec<Token>, error::SyntaxError> {
+    pub fn tokenize(code: &str, is_debug: bool) -> Result<Vec<Token>, error::SyntaxError> {
         let mut tokens = Vec::<Token>::new();
         let mut reserved_words = HashSet::new();
         for &word in &RESERVED_WORDS {
@@ -149,6 +149,9 @@ impl Tokenizer {
                 }
             }
         }
+        if is_debug {
+            Self::print_tokens(&tokens);
+        }
         Ok(tokens)
     }
     pub fn print_tokens(tokens: &[Token]) {
@@ -219,12 +222,12 @@ mod tests {
                 i_value: 0,
             },
         ];
-        assert_eq!(Tokenizer::tokenize(code).unwrap(), expected);
+        assert_eq!(Tokenizer::tokenize(code, false).unwrap(), expected);
     }
 
     #[test]
     fn test_tokenize_error() {
         let code = "int main() { char *s = \"hello; return 0; }";
-        assert!(Tokenizer::tokenize(code).is_err());
+        assert!(Tokenizer::tokenize(code, false).is_err());
     }
 }

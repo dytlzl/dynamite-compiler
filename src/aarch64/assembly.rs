@@ -48,6 +48,7 @@ impl Assembly {
             operator,
             operand1: None,
             operand2: None,
+            operand3: None,
         })
     }
     pub fn inst1<T1>(operator: InstOperator, operand1: T1) -> Assembly
@@ -58,6 +59,7 @@ impl Assembly {
             operator,
             operand1: Some(operand1.into()),
             operand2: None,
+            operand3: None,
         })
     }
     pub fn inst2<T1, T2>(operator: InstOperator, operand1: T1, operand2: T2) -> Assembly
@@ -69,23 +71,45 @@ impl Assembly {
             operator,
             operand1: Some(operand1.into()),
             operand2: Some(operand2.into()),
+            operand3: None,
+        })
+    }
+    pub fn inst3<T1, T2, T3>(
+        operator: InstOperator,
+        operand1: T1,
+        operand2: T2,
+        operand3: T3,
+    ) -> Assembly
+    where
+        T1: Into<InstOperand>,
+        T2: Into<InstOperand>,
+        T3: Into<InstOperand>,
+    {
+        Assembly::Inst(Instruction {
+            operator,
+            operand1: Some(operand1.into()),
+            operand2: Some(operand2.into()),
+            operand3: Some(operand3.into()),
         })
     }
     pub fn reset_stack(stack_size: usize) -> Assembly {
         vec![
-            Assembly::inst2(MOV, RSP, RBP),
-            Assembly::inst2(SUB, RSP, stack_size),
+            Assembly::inst2(MOV, X15, X14),
+            Assembly::inst2(SUB, X15, stack_size),
         ]
         .into()
     }
     pub fn epilogue() -> Assembly {
         Assembly::Group(vec![
-            Assembly::inst2(MOV, RSP, RBP),
-            Assembly::inst1(POP, RBP),
+            Assembly::inst2(MOV, X15, X14),
+            Assembly::inst1(POP, X14),
             Assembly::inst0(RET),
         ])
     }
-    pub fn to_string(&self, target_os: Os) -> String {
+}
+
+impl crate::generator::Assembly for Assembly {
+    fn to_string(&self, target_os: Os) -> String {
         match self {
             Assembly::Inst(i) => i.to_string(target_os),
             Assembly::Other(o) => o.clone(),
