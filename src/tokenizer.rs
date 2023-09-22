@@ -155,3 +155,76 @@ impl Tokenizer {
         tokens.iter().for_each(|t| t.print())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tokenize() {
+        let code = "int main() { return 0; }";
+        let expected = vec![
+            Token {
+                tt: TokenType::Reserved,
+                pos: 0,
+                s_value: String::from("int"),
+                i_value: 0,
+            },
+            Token {
+                tt: TokenType::Ident,
+                pos: 4,
+                s_value: String::from("main"),
+                i_value: 0,
+            },
+            Token {
+                tt: TokenType::Reserved,
+                pos: 8,
+                s_value: String::from("("),
+                i_value: 0,
+            },
+            Token {
+                tt: TokenType::Reserved,
+                pos: 9,
+                s_value: String::from(")"),
+                i_value: 0,
+            },
+            Token {
+                tt: TokenType::Reserved,
+                pos: 11,
+                s_value: String::from("{"),
+                i_value: 0,
+            },
+            Token {
+                tt: TokenType::Reserved,
+                pos: 13,
+                s_value: String::from("return"),
+                i_value: 0,
+            },
+            Token {
+                tt: TokenType::Num,
+                pos: 20,
+                s_value: String::new(),
+                i_value: 0,
+            },
+            Token {
+                tt: TokenType::Reserved,
+                pos: 21,
+                s_value: String::from(";"),
+                i_value: 0,
+            },
+            Token {
+                tt: TokenType::Reserved,
+                pos: 23,
+                s_value: String::from("}"),
+                i_value: 0,
+            },
+        ];
+        assert_eq!(Tokenizer::tokenize(code).unwrap(), expected);
+    }
+
+    #[test]
+    fn test_tokenize_error() {
+        let code = "int main() { char *s = \"hello; return 0; }";
+        assert!(Tokenizer::tokenize(code).is_err());
+    }
+}

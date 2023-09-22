@@ -7,6 +7,7 @@ pub fn error(err: &str) {
     std::process::exit(1);
 }
 
+#[derive(Debug)]
 pub struct SyntaxError {
     pos: usize,
     msg: &'static str,
