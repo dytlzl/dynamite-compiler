@@ -179,15 +179,21 @@ pub struct Instruction {
 }
 impl Instruction {
     pub fn to_string(&self, target_os: Os) -> String {
-        let mut res = format!("  {}", self.operator.to_string(target_os));
-        if self.operand1.is_some() {
-            res += " ";
-            res += &self.operand1.as_ref().unwrap().to_string()[..]
-        }
         if self.operand2.is_some() {
-            res += ", ";
-            res += &self.operand2.as_ref().unwrap().to_string()[..]
+            return format!(
+                "  {} {}, {}",
+                self.operator.to_string(target_os),
+                &self.operand1.as_ref().unwrap().to_string()[..],
+                &self.operand2.as_ref().unwrap().to_string()[..]
+            );
         }
-        res
+        if self.operand1.is_some() {
+            return format!(
+                "  {} {}",
+                self.operator.to_string(target_os),
+                &self.operand1.as_ref().unwrap().to_string()[..],
+            );
+        }
+        format!("  {}", self.operator.to_string(target_os))
     }
 }
