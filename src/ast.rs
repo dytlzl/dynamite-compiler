@@ -50,37 +50,47 @@ impl AstBuilder for AstBuilderImpl<'_> {
     }
 }
 
+pub fn reserved_functions() -> HashMap<String, Identifier> {
+    [
+        (
+            String::from("printf"),
+            Identifier::Static(Type::Func(
+                vec![Type::Ptr(Box::new(Type::I8))],
+                Box::new(Type::I32),
+            )),
+        ),
+        (
+            String::from("puts"),
+            Identifier::Static(Type::Func(
+                vec![Type::Ptr(Box::new(Type::I8))],
+                Box::new(Type::I32),
+            )),
+        ),
+        (
+            String::from("putchar"),
+            Identifier::Static(Type::Func(vec![Type::I8], Box::new(Type::I32))),
+        ),
+        (
+            String::from("exit"),
+            Identifier::Static(Type::Func(vec![Type::I8], Box::new(Type::I32))),
+        ),
+    ]
+    .into_iter()
+    .collect::<HashMap<_, _>>()
+}
+
 impl<'a> AstBuilderImpl<'a> {
     pub fn new(error_logger: &'a dyn error::ErrorLogger, tokens: &'a Vec<Token>) -> Self {
-        let mut builder = Self {
+        Self {
             error_logger,
             tokens,
             cur: 0,
             offset_size: 0,
-            scope_stack: Vec::new(),
+            scope_stack: vec![reserved_functions()],
             functions: HashMap::new(),
             global_variables: HashMap::new(),
             string_literals: Vec::new(),
-        };
-        let mut map = HashMap::new();
-        map.insert(
-            String::from("printf"),
-            Identifier::Static(Type::Func(vec![], Box::new(Type::I32))),
-        );
-        map.insert(
-            String::from("puts"),
-            Identifier::Static(Type::Func(vec![], Box::new(Type::I32))),
-        );
-        map.insert(
-            String::from("putchar"),
-            Identifier::Static(Type::Func(vec![], Box::new(Type::I32))),
-        );
-        map.insert(
-            String::from("exit"),
-            Identifier::Static(Type::Func(vec![], Box::new(Type::I32))),
-        );
-        builder.scope_stack.push(map);
-        builder
+        }
     }
     fn attempt_reserved(&mut self, s_value: &str) -> Option<Token> {
         if let TokenType::Reserved = self.tokens[self.cur].tt {

@@ -20,6 +20,13 @@ fn it_defines_one_global_variable() {
 }
 
 #[test]
+fn it_compiles_simple_c() {
+    let code = &fs::read_to_string("./tests/c/simple.c").unwrap();
+    let got = compile_and_get_stdout(code);
+    assert_eq!(got, "12, 2, 35, 5\n")
+}
+
+#[test]
 fn it_compiles_string_c() {
     let code = &fs::read_to_string("./tests/c/string.c").unwrap();
     let got = compile_and_get_stdout(code);
@@ -57,7 +64,7 @@ fn compile_and_get_stdout(code: &str) -> String {
     let mut rng = rand::thread_rng();
     fs::create_dir_all("./tests/temp").unwrap();
     let binary_name = &format!("./tests/temp/{}", Alphanumeric.sample_string(&mut rng, 32));
-    let mut child = Command::new("cc")
+    let child = Command::new("cc")
         .args(["-x", "assembler", "-o", binary_name, "-"])
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
@@ -69,7 +76,8 @@ fn compile_and_get_stdout(code: &str) -> String {
     } else {
         eprintln!("Failed to open stdin");
     }
-    let _ = child.wait().unwrap();
+    let cc_output = child.wait_with_output().unwrap();
+    println!("{}", String::from_utf8_lossy(&cc_output.stderr));
     let output = Command::new(binary_name).output().unwrap();
     let got = String::from_utf8_lossy(&output.stdout);
     remove_file(binary_name).unwrap();

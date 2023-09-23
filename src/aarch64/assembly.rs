@@ -1,9 +1,4 @@
-use crate::aarch64::instruction::{
-    InstOperand,
-    InstOperator::{self, *},
-    Instruction,
-    Register::*,
-};
+use crate::aarch64::instruction::{InstOperand, InstOperator, Instruction};
 use crate::Os;
 
 pub enum Assembly {
@@ -46,9 +41,7 @@ impl Assembly {
     pub fn inst0(operator: InstOperator) -> Assembly {
         Assembly::Inst(Instruction {
             operator,
-            operand1: None,
-            operand2: None,
-            operand3: None,
+            ..Instruction::default()
         })
     }
     pub fn inst1<T1>(operator: InstOperator, operand1: T1) -> Assembly
@@ -58,8 +51,7 @@ impl Assembly {
         Assembly::Inst(Instruction {
             operator,
             operand1: Some(operand1.into()),
-            operand2: None,
-            operand3: None,
+            ..Instruction::default()
         })
     }
     pub fn inst2<T1, T2>(operator: InstOperator, operand1: T1, operand2: T2) -> Assembly
@@ -71,7 +63,7 @@ impl Assembly {
             operator,
             operand1: Some(operand1.into()),
             operand2: Some(operand2.into()),
-            operand3: None,
+            ..Instruction::default()
         })
     }
     pub fn inst3<T1, T2, T3>(
@@ -90,21 +82,29 @@ impl Assembly {
             operand1: Some(operand1.into()),
             operand2: Some(operand2.into()),
             operand3: Some(operand3.into()),
+            ..Instruction::default()
         })
     }
-    pub fn reset_stack(stack_size: usize) -> Assembly {
-        vec![
-            Assembly::inst2(MOV, X15, X14),
-            Assembly::inst2(SUB, X15, stack_size),
-        ]
-        .into()
-    }
-    pub fn epilogue() -> Assembly {
-        Assembly::Group(vec![
-            Assembly::inst2(MOV, X15, X14),
-            Assembly::inst1(POP, X14),
-            Assembly::inst0(RET),
-        ])
+    pub fn inst4<T1, T2, T3, T4>(
+        operator: InstOperator,
+        operand1: T1,
+        operand2: T2,
+        operand3: T3,
+        operand4: T4,
+    ) -> Assembly
+    where
+        T1: Into<InstOperand>,
+        T2: Into<InstOperand>,
+        T3: Into<InstOperand>,
+        T4: Into<InstOperand>,
+    {
+        Assembly::Inst(Instruction {
+            operator,
+            operand1: Some(operand1.into()),
+            operand2: Some(operand2.into()),
+            operand3: Some(operand3.into()),
+            operand4: Some(operand4.into()),
+        })
     }
 }
 

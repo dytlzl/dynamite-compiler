@@ -1,5 +1,6 @@
 use crate::Os;
 
+#[derive(Default)]
 pub enum InstOperator {
     PUSH,
     POP,
@@ -13,8 +14,8 @@ pub enum InstOperator {
     JMP,
     JE,
     JNE,
-    IMUL,
-    IDIV,
+    MUL,
+    SDIV,
     SHL,
     SAR,
     NOT,
@@ -30,6 +31,14 @@ pub enum InstOperator {
     AND,
     OR,
     XOR,
+    LDR,
+    STR,
+    ADRP,
+    STP,
+    LDP,
+    MSUB,
+    #[default]
+    NOP,
 }
 
 use std::fmt::{Debug, Display, Error, Formatter};
@@ -53,8 +62,9 @@ impl InstOperator {
             JMP => "jmp",
             JE => "je",
             JNE => "jne",
-            IMUL => "imul",
-            IDIV => "idiv",
+            MUL => "mul",
+            SDIV => "sdiv",
+            MSUB => "msub",
             SHL => "shl",
             SAR => "sar",
             NOT => "not",
@@ -70,12 +80,26 @@ impl InstOperator {
             AND => "and",
             OR => "or",
             XOR => "xor",
+            LDR => "ldr",
+            STR => "str",
+            ADRP => "adrp",
+            STP => "stp",
+            LDP => "ldp",
+            NOP => "nop",
         }
     }
 }
 
 #[derive(Copy, Clone, Debug)]
 pub enum Register {
+    X0,
+    X1,
+    X2,
+    X3,
+    X4,
+    X5,
+    X6,
+    X7,
     X8,
     X9,
     X10,
@@ -86,17 +110,28 @@ pub enum Register {
     X15,
     X16,
     X17,
+    X29,
+    X30,
     AL,
     CL,
     RIP,
     R8,
     R9,
+    SP,
 }
 use Register::*;
 
 impl Display for Register {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         f.write_str(match self {
+            X0 => "x0",
+            X1 => "x1",
+            X2 => "x2",
+            X3 => "x3",
+            X4 => "x4",
+            X5 => "x5",
+            X6 => "x6",
+            X7 => "x7",
             X8 => "x8",
             X9 => "x9",
             X10 => "x10",
@@ -106,12 +141,15 @@ impl Display for Register {
             X14 => "x14",
             X15 => "x15",
             X16 => "x16",
-            X17 => "dil",
+            X17 => "x17",
+            X29 => "x29",
+            X30 => "x30",
             AL => "al",
             CL => "cl",
             RIP => "rip",
             R8 => "r8",
             R9 => "r9",
+            SP => "sp",
         })?;
         Ok(())
     }
@@ -140,7 +178,7 @@ impl Display for InstOperand {
             InstOperand::ElseFlag(i) => format!(".Lelse{}", i),
             InstOperand::BeginFlag(i) => format!(".Lbegin{}", i),
             InstOperand::EndFlag(i) => format!(".Lend{}", i),
-            InstOperand::PtrAdd(s, r) => format!("[{} + {}]", s, r),
+            InstOperand::PtrAdd(s, r) => format!("[{}, {}]", s, r),
         })
     }
 }
@@ -168,15 +206,26 @@ impl From<Register> for InstOperand {
         InstOperand::Reg(val)
     }
 }
-
+#[derive(Default)]
 pub struct Instruction {
     pub operator: InstOperator,
     pub operand1: Option<InstOperand>,
     pub operand2: Option<InstOperand>,
     pub operand3: Option<InstOperand>,
+    pub operand4: Option<InstOperand>,
 }
 impl Instruction {
     pub fn to_string(&self, target_os: Os) -> String {
+        if self.operand4.is_some() {
+            return format!(
+                "  {} {}, {}, {}, {}",
+                self.operator.to_string(target_os),
+                &self.operand1.as_ref().unwrap().to_string()[..],
+                &self.operand2.as_ref().unwrap().to_string()[..],
+                &self.operand3.as_ref().unwrap().to_string()[..],
+                &self.operand4.as_ref().unwrap().to_string()[..],
+            );
+        }
         if self.operand3.is_some() {
             return format!(
                 "  {} {}, {}, {}",
