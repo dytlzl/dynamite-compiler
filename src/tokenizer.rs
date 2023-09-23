@@ -50,10 +50,7 @@ impl Tokenizer {
     }
     pub fn tokenize(code: &str, is_debug: bool) -> Result<Vec<Token>, error::SyntaxError> {
         let mut tokens = Vec::<Token>::new();
-        let mut reserved_words = HashSet::new();
-        for &word in &RESERVED_WORDS {
-            reserved_words.insert(word);
-        }
+        let reserved_words = RESERVED_WORDS.into_iter().collect::<HashSet<&str>>();
         let reserved_symbols = Trie::new(&RESERVED_SYMBOLS);
         let chars: Vec<(usize, char)> = code.char_indices().map(|(pos, ch)| (pos, ch)).collect();
         let mut i = 0;

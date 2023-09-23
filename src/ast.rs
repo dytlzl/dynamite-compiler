@@ -6,6 +6,7 @@ use crate::node::{Node, NodeType};
 use crate::token::{Token, TokenType};
 use crate::tokenizer::TYPES;
 use std::collections::HashMap;
+use std::iter::repeat;
 
 pub struct AstBuilderImpl<'a> {
     error_logger: &'a dyn error::ErrorLogger,
@@ -193,18 +194,17 @@ impl<'a> AstBuilderImpl<'a> {
     fn attempt_type(&mut self) -> Option<Type> {
         let pos = self.tokens[self.cur].pos;
         let mut map: HashMap<&str, usize> = HashMap::new();
-        loop {
-            let mut is_type = false;
-            for &ty in &TYPES {
-                if self.attempt_reserved(ty).is_some() {
-                    *map.entry(ty).or_default() += 1;
-                    is_type = true;
-                }
-            }
-            if !is_type {
-                break;
-            }
-        }
+        repeat(())
+            .find(|_| {
+                !TYPES
+                    .iter()
+                    .filter(|ty| self.attempt_reserved(ty).is_some())
+                    .fold(false, |_, ty| {
+                        *map.entry(ty).or_default() += 1;
+                        true
+                    })
+            })
+            .unwrap();
         if map.is_empty() {
             return None;
         }
@@ -302,12 +302,7 @@ impl<'a> AstBuilderImpl<'a> {
         }
     }
     fn resolve_name(&mut self, s: &str) -> Option<&Identifier> {
-        for map in self.scope_stack.iter().rev() {
-            if map.contains_key(s) {
-                return map.get(s);
-            }
-        }
-        None
+        self.scope_stack.iter().rev().find_map(|map| map.get(s))
     }
     fn global_data(&mut self) -> GlobalVariableData {
         if self.attempt_reserved("{").is_some() {

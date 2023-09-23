@@ -71,15 +71,15 @@ fn compile_and_get_stdout(code: &str) -> String {
         .stderr(std::process::Stdio::piped())
         .spawn()
         .unwrap();
-    if let Some(mut stdin) = child.stdin.as_ref() {
-        stdin.write_all(assembly.as_bytes()).unwrap();
-    } else {
-        eprintln!("Failed to open stdin");
-    }
+    child
+        .stdin
+        .as_ref()
+        .map(|mut stdin| stdin.write_all(assembly.as_bytes()))
+        .expect("Failed to open stdin")
+        .expect("Failed to write to stdin");
     let cc_output = child.wait_with_output().unwrap();
     println!("{}", String::from_utf8_lossy(&cc_output.stderr));
     let output = Command::new(binary_name).output().unwrap();
-    let got = String::from_utf8_lossy(&output.stdout);
     remove_file(binary_name).unwrap();
-    String::from(got)
+    String::from_utf8_lossy(&output.stdout).to_string()
 }

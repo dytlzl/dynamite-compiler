@@ -14,12 +14,8 @@ pub struct Func {
 impl Func {
     pub fn print(&self) {
         eprintln!("args:");
-        for arg in &self.args {
-            arg.print(0);
-        }
+        self.args.iter().for_each(|arg| arg.print(0));
         eprintln!("body:");
-        if let Some(n) = &self.body {
-            n.print(0);
-        }
+        self.body.iter().for_each(|n| n.print(0));
     }
 }

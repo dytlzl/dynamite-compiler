@@ -11,6 +11,20 @@ struct Node {
 
 const END_SYMBOL: usize = 127;
 
+/// A trie data structure that matches the longest prefix of a given string.
+///
+/// # Examples
+///
+/// ```
+/// use dynamite_compiler::trie::Trie;
+///
+/// let mut trie = Trie::new(&["hello", "world"]);
+///
+/// assert_eq!(trie.matched_length("hello"), 5);
+/// assert_eq!(trie.matched_length("world"), 5);
+/// assert_eq!(trie.matched_length("hello world"), 5);
+/// assert_eq!(trie.matched_length("foo"), 0);
+/// ```
 impl Trie {
     pub fn new(reserved_symbols: &[&str]) -> Self {
         // Make a double array
@@ -19,21 +33,21 @@ impl Trie {
         let mut trie = Self { double_array };
         // Make a tree of reserved symbols
         let mut root = Node::default();
-        for s in reserved_symbols.iter() {
-            let mut current_node = &mut root;
-            for c in s.chars() {
-                let c_num = c as usize;
-                current_node = current_node.children.entry(c_num).or_default();
-            }
-            current_node.children.entry(END_SYMBOL).or_default();
-        }
+        reserved_symbols.iter().for_each(|s| {
+            s.chars()
+                .fold(&mut root, |current_node, c| {
+                    current_node.children.entry(c as usize).or_default()
+                })
+                .children
+                .entry(END_SYMBOL)
+                .or_default();
+        });
         // Insert a tree into trie
         trie.insert(1, &root);
         trie
     }
     fn insert(&mut self, index: usize, dict: &Node) {
         loop {
-            let mut is_matching = true;
             let offset = self.double_array[index].1;
             if index + offset + END_SYMBOL >= self.double_array.len() {
                 self.double_array.extend(
@@ -41,42 +55,55 @@ impl Trie {
                         .take(index + offset + END_SYMBOL * 3 - self.double_array.len()),
                 )
             }
-            for &c_index in dict.children.keys() {
-                if self.double_array[index + offset + c_index].0 != 0 {
+            let is_matching = dict
+                .children
+                .keys()
+                .find(|&c_index| self.double_array[index + offset + c_index].0 != 0)
+                .map(|_| {
                     self.double_array[index].1 += 1;
-                    is_matching = false;
-                    break;
-                }
-            }
+                    false
+                })
+                .unwrap_or(true);
             if is_matching {
                 break;
             }
         }
         let offset = self.double_array[index].1;
-        for &c_index in dict.children.keys() {
+        dict.children.keys().for_each(|&c_index| {
             self.double_array[index + offset + c_index].0 = index;
-        }
-        for (&c_index, d) in &dict.children {
+        });
+        dict.children.iter().for_each(|(c_index, d)| {
             self.insert(index + offset + c_index, d);
-        }
+        })
     }
     pub fn matched_length(&self, s: &str) -> usize {
-        let mut max_len = 0;
-        let mut current_index = 1;
-        let mut offset = self.double_array[current_index].1;
-        for (i, c) in s.char_indices() {
-            let c_index = c as usize;
-            if c_index >= END_SYMBOL
-                || self.double_array[current_index + offset + c_index].0 != current_index
-            {
-                break;
-            }
-            current_index = current_index + offset + c_index;
-            offset = self.double_array[current_index].1;
-            if self.double_array[current_index + offset + END_SYMBOL].0 == current_index {
-                max_len = i + 1;
-            }
-        }
-        max_len
+        s.char_indices()
+            .try_fold(
+                (0, 1, self.double_array[1].1),
+                |(max_len, current_index, offset), (i, c)| {
+                    if (c as usize) >= END_SYMBOL
+                        || self.double_array[current_index + offset + (c as usize)].0
+                            != current_index
+                    {
+                        Err((max_len, current_index, offset))
+                    } else {
+                        let current_index = current_index + offset + (c as usize);
+                        let offset = self.double_array[current_index].1;
+                        Ok((
+                            if self.double_array[current_index + offset + END_SYMBOL].0
+                                == current_index
+                            {
+                                i + 1
+                            } else {
+                                max_len
+                            },
+                            current_index,
+                            offset,
+                        ))
+                    }
+                },
+            )
+            .unwrap_or_else(|e| e)
+            .0
     }
 }
