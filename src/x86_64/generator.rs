@@ -17,7 +17,6 @@ pub struct AsmGenerator<'a> {
     error_logger: &'a dyn error::ErrorLogger,
     target_os: Os,
     loop_stack: Vec<usize>,
-    pub assemblies: Vec<Assembly>,
 }
 
 const ARGS_REG: [Register; 6] = [RDI, RSI, RDX, RCX, R8, R9];
@@ -34,7 +33,6 @@ impl<'a> AsmGenerator<'a> {
             error_logger,
             target_os,
             loop_stack: Vec::new(),
-            assemblies: Vec::new(),
         }
     }
 

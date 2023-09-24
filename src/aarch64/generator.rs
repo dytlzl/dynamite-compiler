@@ -17,7 +17,6 @@ pub struct AsmGenerator<'a> {
     error_logger: &'a dyn error::ErrorLogger,
     target_os: Os,
     loop_stack: Vec<usize>,
-    pub assemblies: Vec<Assembly>,
 }
 
 const ARGS_REG: [Register; 8] = [X0, X1, X2, X3, X4, X5, X6, X7];
@@ -34,7 +33,6 @@ impl<'a> AsmGenerator<'a> {
             error_logger,
             target_os,
             loop_stack: Vec::new(),
-            assemblies: Vec::new(),
         }
     }
     fn generate(&mut self, ast: ProgramAst) -> Box<dyn crate::generator::Assembly> {
