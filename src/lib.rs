@@ -31,7 +31,7 @@ pub fn run(code: &str, target_arch: Arch, target_os: Os, is_debug: bool) -> Stri
         std::process::exit(1)
     });
     let mut builder = ast::AstBuilderImpl::new(&error_printer, &tokens);
-    let mut generator = generator::new(target_arch, &error_printer, target_os);
+    let generator = generator::new(target_arch, &error_printer, target_os);
     generator
         .generate(builder.build(is_debug))
         .to_string(target_os)

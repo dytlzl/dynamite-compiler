@@ -5,7 +5,7 @@ pub trait Assembly {
 }
 
 pub trait Generator {
-    fn generate(&mut self, ast: ProgramAst) -> Box<dyn Assembly>;
+    fn generate(&self, ast: ProgramAst) -> Box<dyn Assembly>;
 }
 
 pub fn new<'a>(
