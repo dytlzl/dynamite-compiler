@@ -21,8 +21,10 @@ impl SyntaxError {
 
 pub trait ErrorLogger {
     fn print_error_position(&self, pos: usize, msg: &str);
-    fn print_syntax_error_position(&self, err: SyntaxError);
     fn line_from_position(&self, pos: usize) -> (usize, usize, &str);
+    fn print_syntax_error_position(&self, err: SyntaxError) {
+        self.print_error_position(err.pos, err.msg);
+    }
 }
 
 pub struct ErrorPrinter<'a> {
@@ -36,9 +38,6 @@ impl<'a> ErrorPrinter<'a> {
 }
 
 impl ErrorLogger for ErrorPrinter<'_> {
-    fn print_syntax_error_position(&self, err: SyntaxError) {
-        self.print_error_position(err.pos, err.msg);
-    }
     fn line_from_position(&self, pos: usize) -> (usize, usize, &str) {
         let (line_count, start_index) = self.code[..pos]
             .char_indices()
@@ -81,7 +80,6 @@ impl ErrorLogger for ErrorPrinter<'_> {
 pub struct NopLogger {}
 
 impl ErrorLogger for NopLogger {
-    fn print_syntax_error_position(&self, _: SyntaxError) {}
     fn print_error_position(&self, _: usize, _: &str) {}
     fn line_from_position(&self, _: usize) -> (usize, usize, &str) {
         (0, 0, "")
