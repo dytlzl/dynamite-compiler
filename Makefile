@@ -39,3 +39,5 @@ ccc2s: create-temp
 ccs2b: create-temp
 	cc -o ./temp/binary/temp_cc ./temp/temp_cc.s
 	./temp/binary/temp_cc
+
+ccc2b: ccc2s ccs2b

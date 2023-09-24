@@ -23,7 +23,14 @@ fn it_defines_one_global_variable() {
 fn it_compiles_simple_c() {
     let code = &fs::read_to_string("./tests/c/simple.c").unwrap();
     let got = compile_and_get_stdout(code);
-    assert_eq!(got, "12, 2, 35, 5\n")
+    assert_eq!(got, "12, 2, 35, 5, 7\n")
+}
+
+#[test]
+fn it_compiles_character_constant_c() {
+    let code = &fs::read_to_string("./tests/c/character_constant.c").unwrap();
+    let got = compile_and_get_stdout(code);
+    assert_eq!(got, "k, ', \\, \n, %\n\t")
 }
 
 #[test]

@@ -60,9 +60,12 @@ impl ErrorLogger for ErrorPrinter<'_> {
     fn print_error_position(&self, pos: usize, msg: &str) {
         let (row, col, line) = self.line_from_position(pos);
         let row_number = format!("{} | ", row);
-        eprintln!("{}{}{}{}", row_number, COLOR_CYAN, line, COLOR_RESET);
-        eprintln!(
-            "{}{}^ {}{}",
+        panic!(
+            "\n{}{}{}{}\n{}{}^ {}{}",
+            row_number,
+            COLOR_CYAN,
+            line,
+            COLOR_RESET,
             " ".repeat(col + row_number.len()),
             COLOR_RED,
             if pos >= self.code.len() {
@@ -71,8 +74,7 @@ impl ErrorLogger for ErrorPrinter<'_> {
                 msg
             },
             COLOR_RESET
-        );
-        std::process::exit(1);
+        )
     }
 }
 #[derive(Default)]

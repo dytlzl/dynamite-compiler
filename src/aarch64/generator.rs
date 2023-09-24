@@ -44,7 +44,8 @@ impl<'a> AsmGenerator<'a> {
                 ast.functions
                     .iter()
                     .fold((0, vec![]), |(last_offset, mut last_vec), (name, f)| {
-                        let stack_offset = last_offset + f.offset_size;
+                        let func_offset_with_alignment = (f.offset_size + 15) / 16 * 16;
+                        let stack_offset = last_offset + func_offset_with_alignment;
                         last_vec.push(self.gen_func(name, f, stack_offset));
                         (stack_offset, last_vec)
                     })
@@ -158,12 +159,13 @@ impl<'a> AsmGenerator<'a> {
         if func.body.is_none() {
             return vec![].into();
         }
+        let func_offset_with_alignment = (func.offset_size + 15) / 16 * 16;
         vec![
             format!("	.globl	{}", self.with_prefix(name)).into(),
             "	.p2align	2".into(),
             format!("{}:", self.with_prefix(name)).into(),
             // prologue
-            Assembly::inst3(SUB, SP, SP, func.offset_size),
+            Assembly::inst3(SUB, SP, SP, func_offset_with_alignment),
             Assembly::inst3(STP, X29, X30, PtrAdd(SP, "#16".to_string())),
             Assembly::inst2(MOV, X9, SP),
             func.args
@@ -218,7 +220,7 @@ impl<'a> AsmGenerator<'a> {
     }
 
     pub fn reset_stack(stack_size: usize) -> Assembly {
-        vec![Assembly::inst3(ADD, SP, SP, stack_size)].into()
+        vec![Assembly::inst3(ADD, X9, X9, stack_size)].into()
     }
     pub fn epilogue() -> Assembly {
         Assembly::Group(vec![
@@ -239,15 +241,9 @@ impl<'a> AsmGenerator<'a> {
                         args.len()
                     })
                     .unwrap_or(node.args.len());
-                if fixed_args_len % 2 == 1 {
-                    Self::push(X8);
-                }
+                let variadic_args_len = node.args.len() - fixed_args_len;
                 return vec![
-                    if (node.args.len() - fixed_args_len) % 2 == 1 {
-                        Self::push(X8)
-                    } else {
-                        vec![].into()
-                    },
+                    Assembly::inst3(SUB, X9, X9, variadic_args_len % 2 * 8), // if the length of variadic args is odd, we need to align the stack
                     node.args
                         .iter()
                         .map(|node| self.gen_with_node(node, offset))
@@ -261,8 +257,9 @@ impl<'a> AsmGenerator<'a> {
                         .into(),
                     Assembly::inst2(MOV, SP, X9),
                     Assembly::inst1(BL, self.with_prefix(&node.global_name)),
-                    Assembly::inst3(ADD, SP, SP, (node.args.len() - fixed_args_len + 1) / 2 * 16),
+                    Assembly::inst3(ADD, SP, SP, (variadic_args_len + 1) / 2 * 16), // restore SP to the original value before calling the function
                     Assembly::inst2(MOV, X9, SP),
+                    Self::push(X0), // push the return value
                 ]
                 .into();
             }
@@ -535,7 +532,7 @@ impl<'a> AsmGenerator<'a> {
                 vec![
                     self.gen_with_node(node, offset),
                     Self::pop(X8),
-                    Self::reset_stack(offset),
+                    // Self::reset_stack(offset),
                 ]
                 .into()
             })

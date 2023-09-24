@@ -5,15 +5,16 @@ use std::collections::HashSet;
 
 pub const TYPES: [&str; 2] = ["int", "char"];
 const RESERVED_WORDS: [&str; 7] = ["return", "if", "else", "while", "for", "break", "sizeof"];
-const RESERVED_SYMBOLS: [&str; 47] = [
+const RESERVED_SYMBOLS: [&str; 48] = [
     "=", "+", "-", "*", "/", "%", "<", ">", "==", "!=", "+=", "-=", "*=", "/=", "%=", "<=", ">=",
     "&", "^", "|", "&&", "||", "<<", ">>", "{", "}", "(", ")", "[", "]", ",", ";", "/*", "//",
-    "\"", "!", "~", "?", ":", "<<=", ">>=", "&=", "^=", "|=", "++", "--", "#",
+    "\"", "!", "~", "?", ":", "<<=", ">>=", "&=", "^=", "|=", "++", "--", "#", "'",
 ];
 
 fn close_symbol(s: &str) -> Option<&str> {
     match s {
         "\"" => Some("\""),
+        "\'" => Some("\'"),
         "//" => Some("\n"),
         "/*" => Some("*/"),
         "#" => Some("\n"),
@@ -126,6 +127,9 @@ impl Tokenizer {
                                     if code[chars[i].0..].starts_with(close_sym) {
                                         i += close_sym.len();
                                         break;
+                                    }
+                                    if code[chars[i].0..].starts_with('\\') {
+                                        i += 2;
                                     } else {
                                         i += 1;
                                     }
@@ -134,9 +138,44 @@ impl Tokenizer {
                                     tokens.push(Token {
                                         tt: TokenType::Str,
                                         pos,
-                                        s_value: String::from(&code[pos + 1..chars[i].0 - 1]), // symbol is ascii
+                                        s_value: String::from(&code[pos + 1..i - 1]), // symbol is ascii
                                         ..Token::default()
                                     })
+                                }
+                                if &code[pos..pos + match_size] == "'" {
+                                    if i - pos == 2 {
+                                        return Err(error::SyntaxError::new(
+                                            pos + 1,
+                                            "unexpected character",
+                                        ));
+                                    }
+                                    if i - pos > 3 {
+                                        let escaped_character = match &code[pos + 1..pos + 3] {
+                                            "\\\\" => '\\',
+                                            "\\'" => '\'',
+                                            "\\t" => '\t',
+                                            "\\n" => '\n',
+                                            _ => {
+                                                return Err(error::SyntaxError::new(
+                                                    pos,
+                                                    "multi-character character constant",
+                                                ))
+                                            }
+                                        };
+                                        tokens.push(Token {
+                                            tt: TokenType::Num,
+                                            pos,
+                                            i_value: escaped_character as usize,
+                                            ..Token::default()
+                                        })
+                                    } else {
+                                        tokens.push(Token {
+                                            tt: TokenType::Num,
+                                            pos,
+                                            i_value: code[pos + 1..pos + 2].as_bytes()[0] as usize,
+                                            ..Token::default()
+                                        })
+                                    }
                                 }
                             }
                             None => {
