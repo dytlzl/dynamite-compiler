@@ -58,7 +58,7 @@ impl<'a> AsmGenerator<'a> {
         )
     }
 
-    pub fn gen_string_literals(&self, string_literals: &Vec<String>) -> Assembly {
+    fn gen_string_literals(&self, string_literals: &Vec<String>) -> Assembly {
         if string_literals.is_empty() {
             vec![]
         } else {
@@ -85,7 +85,7 @@ impl<'a> AsmGenerator<'a> {
         .into()
     }
 
-    pub fn gen_global_variable(&self, name: &str, gv: &GlobalVariable) -> Assembly {
+    fn gen_global_variable(&self, name: &str, gv: &GlobalVariable) -> Assembly {
         vec![
             format!("{}:", self.with_prefix(name)).into(),
             Self::gen_initializer_element(&gv.ty, gv.data.as_ref()),
@@ -93,7 +93,7 @@ impl<'a> AsmGenerator<'a> {
         .into()
     }
 
-    pub fn gen_initializer_element(ty: &Type, data: Option<&GlobalVariableData>) -> Assembly {
+    fn gen_initializer_element(ty: &Type, data: Option<&GlobalVariableData>) -> Assembly {
         match ty {
             Type::Arr(children_ty, size) => {
                 if let Some(GlobalVariableData::Arr(v)) = data {
@@ -151,7 +151,7 @@ impl<'a> AsmGenerator<'a> {
         }
     }
 
-    pub fn gen_func(&self, name: &str, func: &Func, offset: usize) -> Assembly {
+    fn gen_func(&self, name: &str, func: &Func, offset: usize) -> Assembly {
         if func.body.is_none() {
             return vec![].into();
         }
@@ -186,7 +186,7 @@ impl<'a> AsmGenerator<'a> {
                 })
                 .collect::<Vec<Assembly>>()
                 .into(),
-            self.gen_with_node(func.body.as_ref().unwrap(), offset, 0),
+            self.gen_node(func.body.as_ref().unwrap(), offset, 0),
             Assembly::inst2(MOV, X0, 0), // default return value
             Self::epilogue(),
         ]
@@ -216,19 +216,21 @@ impl<'a> AsmGenerator<'a> {
         .into()
     }
 
-    pub fn reset_stack(stack_size: usize) -> Assembly {
+    fn reset_stack(stack_size: usize) -> Assembly {
         vec![Assembly::inst3(ADD, X9, X9, stack_size)].into()
     }
-    pub fn epilogue() -> Assembly {
+    fn epilogue() -> Assembly {
         Assembly::Group(vec![
             Assembly::inst3(LDP, X29, X30, PtrAdd(SP, "#16".to_string())),
             Assembly::inst0(RET),
         ])
     }
 
-    fn gen_with_node(&self, node: &Node, offset: usize, breakable_branch_num: usize) -> Assembly {
+    fn gen_node(&self, node: &Node, offset: usize, breakable_branch_num: usize) -> Assembly {
         match node.nt {
-            NodeType::DefVar => return self.gen_with_vec(&node.children, offset, breakable_branch_num),
+            NodeType::DefVar => {
+                return self.gen_statements(&node.children, offset, breakable_branch_num)
+            }
             NodeType::CallFunc => {
                 let fixed_args_len = reserved_functions()
                     .get(node.global_name.as_str())
@@ -243,7 +245,7 @@ impl<'a> AsmGenerator<'a> {
                     Assembly::inst3(SUB, X9, X9, variadic_args_len % 2 * 8), // if the length of variadic args is odd, we need to align the stack
                     node.args
                         .iter()
-                        .map(|node| self.gen_with_node(node, offset, breakable_branch_num))
+                        .map(|node| self.gen_node(node, offset, breakable_branch_num))
                         .collect::<Vec<Assembly>>()
                         .into(),
                     ARGS_REG
@@ -263,16 +265,16 @@ impl<'a> AsmGenerator<'a> {
             NodeType::If => {
                 let branch_num = node.token.as_ref().unwrap().pos;
                 return vec![
-                    self.gen_with_node(node.cond.as_ref().unwrap(), offset, breakable_branch_num),
+                    self.gen_node(node.cond.as_ref().unwrap(), offset, breakable_branch_num),
                     Self::pop(X8),
                     Assembly::inst2(CMP, X8, 0),
                     Assembly::inst1(JE, ElseFlag(branch_num)),
-                    self.gen_with_node(node.then.as_ref().unwrap(), offset, breakable_branch_num),
+                    self.gen_node(node.then.as_ref().unwrap(), offset, breakable_branch_num),
                     Assembly::inst1(JMP, EndFlag(branch_num)),
                     format!("{}:", ElseFlag(branch_num)).into(),
                     node.els
                         .as_ref()
-                        .map(|node| self.gen_with_node(node, offset, breakable_branch_num))
+                        .map(|node| self.gen_node(node, offset, breakable_branch_num))
                         .unwrap_or_else(|| vec![].into()),
                     format!("{}:", EndFlag(branch_num)).into(),
                 ]
@@ -283,11 +285,11 @@ impl<'a> AsmGenerator<'a> {
                 let v = vec![
                     format!("{}:", BeginFlag(branch_num)).into(),
                     Self::reset_stack(offset),
-                    self.gen_with_node(node.cond.as_ref().unwrap(), offset, branch_num),
+                    self.gen_node(node.cond.as_ref().unwrap(), offset, branch_num),
                     Self::pop(X8),
                     Assembly::inst2(CMP, X8, 0),
                     Assembly::inst1(JE, EndFlag(branch_num)),
-                    self.gen_with_node(node.then.as_ref().unwrap(), offset, branch_num),
+                    self.gen_node(node.then.as_ref().unwrap(), offset, branch_num),
                     Assembly::inst1(JMP, BeginFlag(branch_num)),
                     format!("{}:", EndFlag(branch_num)).into(),
                 ];
@@ -297,20 +299,20 @@ impl<'a> AsmGenerator<'a> {
                 let branch_num = node.token.as_ref().unwrap().pos;
                 let v = vec![
                     node.ini.as_ref().map_or(Vec::new().into(), |node| {
-                        vec![self.gen_with_node(node, offset, branch_num), Self::pop(X8)].into()
+                        vec![self.gen_node(node, offset, branch_num), Self::pop(X8)].into()
                     }),
                     format!("{}:", BeginFlag(branch_num)).into(),
                     Self::reset_stack(offset),
                     node.cond
                         .as_ref()
                         .map_or(Assembly::inst2(MOV, X8, 1), |node| {
-                            vec![self.gen_with_node(node, offset, branch_num), Self::pop(X8)].into()
+                            vec![self.gen_node(node, offset, branch_num), Self::pop(X8)].into()
                         }),
                     Assembly::inst2(CMP, X8, 0),
                     Assembly::inst1(JE, EndFlag(branch_num)),
-                    self.gen_with_node(node.then.as_ref().unwrap(), offset, branch_num),
+                    self.gen_node(node.then.as_ref().unwrap(), offset, branch_num),
                     node.upd.as_ref().map_or(Vec::new().into(), |node| {
-                        vec![self.gen_with_node(node, offset, branch_num), Self::pop(X8)].into()
+                        vec![self.gen_node(node, offset, branch_num), Self::pop(X8)].into()
                     }),
                     Assembly::inst1(JMP, BeginFlag(branch_num)),
                     format!("{}:", EndFlag(branch_num)).into(),
@@ -318,7 +320,7 @@ impl<'a> AsmGenerator<'a> {
                 return v.into();
             }
             NodeType::Block => {
-                return self.gen_with_vec(&node.children, offset, breakable_branch_num);
+                return self.gen_statements(&node.children, offset, breakable_branch_num);
             }
             NodeType::Break => {
                 if breakable_branch_num != 0 {
@@ -332,7 +334,7 @@ impl<'a> AsmGenerator<'a> {
             }
             NodeType::Return => {
                 return vec![
-                    self.gen_with_node(node.lhs.as_ref().unwrap(), offset, breakable_branch_num),
+                    self.gen_node(node.lhs.as_ref().unwrap(), offset, breakable_branch_num),
                     Self::pop(X0),
                     Self::epilogue(),
                 ]
@@ -357,7 +359,7 @@ impl<'a> AsmGenerator<'a> {
             }
             NodeType::Deref => {
                 return vec![
-                    self.gen_with_node(node.lhs.as_ref().unwrap(), offset, breakable_branch_num),
+                    self.gen_node(node.lhs.as_ref().unwrap(), offset, breakable_branch_num),
                     if let Some(Type::Arr(..)) = node.lhs.as_ref().unwrap().dest_type() {
                         vec![].into()
                     } else {
@@ -369,7 +371,7 @@ impl<'a> AsmGenerator<'a> {
             NodeType::Assign => {
                 return vec![
                     self.gen_addr(node.lhs.as_ref().unwrap(), offset, breakable_branch_num),
-                    self.gen_with_node(node.rhs.as_ref().unwrap(), offset, breakable_branch_num),
+                    self.gen_node(node.rhs.as_ref().unwrap(), offset, breakable_branch_num),
                     Self::pop(X13),
                     Self::pop(X8),
                     self.operation2rdi(node.lhs.as_ref().unwrap().resolve_type(), MOV, X8),
@@ -379,8 +381,8 @@ impl<'a> AsmGenerator<'a> {
             }
             NodeType::BitLeft | NodeType::BitRight => {
                 return vec![
-                    self.gen_with_node(node.rhs.as_ref().unwrap(), offset, breakable_branch_num),
-                    self.gen_with_node(node.lhs.as_ref().unwrap(), offset, breakable_branch_num),
+                    self.gen_node(node.rhs.as_ref().unwrap(), offset, breakable_branch_num),
+                    self.gen_node(node.lhs.as_ref().unwrap(), offset, breakable_branch_num),
                     Self::pop(X8),
                     Self::pop(X10),
                     Assembly::inst2(
@@ -400,7 +402,7 @@ impl<'a> AsmGenerator<'a> {
             }
             NodeType::BitNot => {
                 return vec![
-                    self.gen_with_node(node.lhs.as_ref().unwrap(), offset, breakable_branch_num),
+                    self.gen_node(node.lhs.as_ref().unwrap(), offset, breakable_branch_num),
                     Self::pop(X8),
                     Assembly::inst1(NOT, X8),
                     Self::push(X8),
@@ -410,11 +412,11 @@ impl<'a> AsmGenerator<'a> {
             NodeType::LogicalAnd => {
                 let branch_num = node.token.as_ref().unwrap().pos;
                 return vec![
-                    self.gen_with_node(node.lhs.as_ref().unwrap(), offset, branch_num),
+                    self.gen_node(node.lhs.as_ref().unwrap(), offset, branch_num),
                     Self::pop(X8),
                     Assembly::inst2(CMP, X8, 0),
                     Assembly::inst1(JE, EndFlag(branch_num)),
-                    self.gen_with_node(node.rhs.as_ref().unwrap(), offset, branch_num),
+                    self.gen_node(node.rhs.as_ref().unwrap(), offset, branch_num),
                     Self::pop(X8),
                     format!("{}:", EndFlag(branch_num)).into(),
                     Self::push(X8),
@@ -424,11 +426,11 @@ impl<'a> AsmGenerator<'a> {
             NodeType::LogicalOr => {
                 let branch_num = node.token.as_ref().unwrap().pos;
                 return vec![
-                    self.gen_with_node(node.lhs.as_ref().unwrap(), offset, branch_num),
+                    self.gen_node(node.lhs.as_ref().unwrap(), offset, branch_num),
                     Self::pop(X8),
                     Assembly::inst2(CMP, X8, 0),
                     Assembly::inst1(JNE, EndFlag(branch_num)),
-                    self.gen_with_node(node.rhs.as_ref().unwrap(), offset, branch_num),
+                    self.gen_node(node.rhs.as_ref().unwrap(), offset, branch_num),
                     Self::pop(X8),
                     format!("{}:", EndFlag(branch_num)).into(),
                     Self::push(X8),
@@ -460,8 +462,8 @@ impl<'a> AsmGenerator<'a> {
             _ => {}
         }
         vec![
-            self.gen_with_node(node.rhs.as_ref().unwrap(), offset, breakable_branch_num),
-            self.gen_with_node(node.lhs.as_ref().unwrap(), offset, breakable_branch_num),
+            self.gen_node(node.rhs.as_ref().unwrap(), offset, breakable_branch_num),
+            self.gen_node(node.lhs.as_ref().unwrap(), offset, breakable_branch_num),
             Self::pop(X8),
             Self::pop(X13),
             match node.nt {
@@ -519,11 +521,11 @@ impl<'a> AsmGenerator<'a> {
         .into()
     }
 
-    fn gen_with_vec(&self, v: &[Node], offset: usize, branch_num: usize) -> Assembly {
+    fn gen_statements(&self, v: &[Node], offset: usize, branch_num: usize) -> Assembly {
         v.iter()
             .map(|node| {
                 vec![
-                    self.gen_with_node(node, offset, branch_num),
+                    self.gen_node(node, offset, branch_num),
                     Self::pop(X8),
                     // Self::reset_stack(offset),
                 ]
@@ -563,7 +565,7 @@ impl<'a> AsmGenerator<'a> {
                 Self::push(X8),
             ]
             .into(),
-            NodeType::Deref => self.gen_with_node(node.lhs.as_ref().unwrap(), offset, branch_num),
+            NodeType::Deref => self.gen_node(node.lhs.as_ref().unwrap(), offset, branch_num),
             _ => {
                 unreachable!();
             }
