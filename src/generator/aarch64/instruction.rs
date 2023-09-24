@@ -2,8 +2,6 @@ use crate::generator::Os;
 
 #[derive(Default)]
 pub enum InstOperator {
-    PUSH,
-    POP,
     MOV,
     ADD,
     SUB,
@@ -50,8 +48,6 @@ impl InstOperator {
             return "movzb";
         }
         match self {
-            PUSH => "push",
-            POP => "pop",
             MOV => "mov",
             ADD => "add",
             SUB => "sub",

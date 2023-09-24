@@ -36,6 +36,7 @@ fn it_compiles_character_constant_c() {
     assert_eq!(got, "k, ', \\, \n, %\n\t")
 }
 
+#[cfg(target_arch = "x86_64")]
 #[test]
 fn it_compiles_string_c() {
     let code = &fs::read_to_string("./tests/c/string.c").unwrap();
@@ -43,6 +44,7 @@ fn it_compiles_string_c() {
     assert_eq!(got, "a = 777, b = 755, c = 222\n")
 }
 
+#[cfg(target_arch = "x86_64")]
 #[test]
 fn it_compiles_expr_c() {
     let code = &fs::read_to_string("./tests/c/expr.c").unwrap();
@@ -52,6 +54,7 @@ fn it_compiles_expr_c() {
         .for_each(|s| panic!("assertion failed:\n  {}\n", s));
 }
 
+#[cfg(target_arch = "x86_64")]
 #[test]
 fn it_compiles_many_functions_c() {
     let code = &fs::read_to_string("./tests/c/many_functions.c").unwrap();
