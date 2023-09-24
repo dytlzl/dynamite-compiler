@@ -8,9 +8,9 @@ use crate::ast::{reserved_functions, Identifier, ProgramAst};
 use crate::ctype::Type;
 use crate::error;
 use crate::func::Func;
+use crate::generator::Os;
 use crate::global::{GlobalVariable, GlobalVariableData};
 use crate::node::{Node, NodeType};
-use crate::Os;
 use std::fmt::Display;
 
 pub struct AsmGenerator<'a> {

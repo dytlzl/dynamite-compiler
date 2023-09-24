@@ -1,5 +1,5 @@
-use crate::aarch64::instruction::{InstOperand, InstOperator, Instruction};
-use crate::Os;
+use super::instruction::{InstOperand, InstOperator, Instruction};
+use crate::generator::Os;
 
 pub enum Assembly {
     Inst(Instruction),

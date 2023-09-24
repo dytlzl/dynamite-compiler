@@ -1,5 +1,5 @@
+use dynamite_compiler::generator::{Arch, Os};
 use dynamite_compiler::run;
-use dynamite_compiler::{Arch, Os};
 use getopts::Options;
 use std::env;
 use std::fs::File;

@@ -1,4 +1,18 @@
-use crate::{aarch64, ast::ProgramAst, error::ErrorPrinter, x86_64, Arch, Os};
+pub mod aarch64;
+pub mod x86_64;
+
+#[derive(Clone, Copy)]
+pub enum Os {
+    Linux,
+    MacOS,
+}
+
+pub enum Arch {
+    Aarch64,
+    X86_64,
+}
+
+use crate::{ast::ProgramAst, error::ErrorPrinter};
 
 pub trait Assembly {
     fn to_string(&self, target_os: Os) -> String;

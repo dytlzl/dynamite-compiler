@@ -1,16 +1,16 @@
-use crate::ast::ProgramAst;
-use crate::ctype::Type;
-use crate::error;
-use crate::func::Func;
-use crate::global::{GlobalVariable, GlobalVariableData};
-use crate::node::{Node, NodeType};
-use crate::x86_64::assembly::Assembly;
-use crate::x86_64::instruction::{
+use super::assembly::Assembly;
+use super::instruction::{
     InstOperand::*,
     InstOperator::{self, *},
     Register::{self, *},
 };
-use crate::Os;
+use crate::ast::ProgramAst;
+use crate::ctype::Type;
+use crate::error;
+use crate::func::Func;
+use crate::generator::Os;
+use crate::global::{GlobalVariable, GlobalVariableData};
+use crate::node::{Node, NodeType};
 use std::fmt::Display;
 
 pub struct AsmGenerator<'a> {

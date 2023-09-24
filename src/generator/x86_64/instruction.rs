@@ -1,4 +1,4 @@
-use crate::Os;
+use crate::generator::Os;
 
 pub enum InstOperator {
     PUSH,

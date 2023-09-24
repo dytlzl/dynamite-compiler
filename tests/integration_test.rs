@@ -1,15 +1,11 @@
+use dynamite_compiler::generator::{Arch, Os};
 use std::{
     fs::{self, remove_file},
     io::Write,
     process::Command,
 };
-
-use dynamite_compiler::{Arch, Os};
-
 extern crate dynamite_compiler;
-
 extern crate rand;
-
 use rand::distributions::{Alphanumeric, DistString};
 
 #[test]

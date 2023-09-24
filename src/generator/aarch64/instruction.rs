@@ -1,4 +1,4 @@
-use crate::Os;
+use crate::generator::Os;
 
 #[derive(Default)]
 pub enum InstOperator {
