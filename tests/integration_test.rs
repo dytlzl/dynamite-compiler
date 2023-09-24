@@ -27,6 +27,13 @@ fn it_compiles_simple_c() {
 }
 
 #[test]
+fn it_compiles_simple_function_c() {
+    let code = &fs::read_to_string("./tests/c/simple_function.c").unwrap();
+    let got = compile_and_get_stdout(code);
+    assert_eq!(got, "10\n")
+}
+
+#[test]
 fn it_compiles_character_constant_c() {
     let code = &fs::read_to_string("./tests/c/character_constant.c").unwrap();
     let got = compile_and_get_stdout(code);
