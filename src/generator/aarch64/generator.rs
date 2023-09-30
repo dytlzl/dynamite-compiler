@@ -46,13 +46,11 @@ impl<'a> AsmGenerator<'a> {
                 "	.section	__TEXT,__text,regular,pure_instructions".into(),
                 ast.functions
                     .iter()
-                    .fold((0, vec![]), |(last_offset, mut last_vec), (name, f)| {
+                    .map(|(name, f)| {
                         let func_offset_with_alignment = (f.offset_size + 15) / 16 * 16;
-                        let stack_offset = last_offset + func_offset_with_alignment;
-                        last_vec.push(self.gen_func(name, f, stack_offset));
-                        (stack_offset, last_vec)
+                        self.gen_func(name, f, func_offset_with_alignment)
                     })
-                    .1
+                    .collect::<Vec<Assembly>>()
                     .into(),
                 ast.global_variables
                     .iter()
@@ -162,13 +160,12 @@ impl<'a> AsmGenerator<'a> {
         if func.body.is_none() {
             return vec![].into();
         }
-        let func_offset_with_alignment = (func.offset_size + 15) / 16 * 16;
         vec![
             format!("	.globl	{}", self.with_prefix(name)).into(),
             "	.p2align	2".into(),
             format!("{}:", self.with_prefix(name)).into(),
             // prologue
-            Assembly::inst3(SUB, SP, SP, func_offset_with_alignment),
+            Assembly::inst3(SUB, SP, SP, offset),
             Assembly::inst3(STP, X29, X30, PtrAdd(SP, "#16".to_string())),
             Assembly::inst2(MOV, X9, SP),
             func.args
@@ -200,7 +197,7 @@ impl<'a> AsmGenerator<'a> {
                 },
             ),
             Assembly::inst2(MOV, X0, 0), // default return value
-            Self::epilogue(),
+            Self::epilogue(offset),
         ]
         .into()
     }
@@ -231,9 +228,10 @@ impl<'a> AsmGenerator<'a> {
     fn reset_stack(stack_size: usize) -> Assembly {
         vec![Assembly::inst3(ADD, X9, X9, stack_size)].into()
     }
-    fn epilogue() -> Assembly {
+    fn epilogue(offset: usize) -> Assembly {
         Assembly::Group(vec![
             Assembly::inst3(LDP, X29, X30, PtrAdd(SP, "#16".to_string())),
+            Assembly::inst3(ADD, SP, SP, offset),
             Assembly::inst0(RET),
         ])
     }
@@ -358,7 +356,7 @@ impl<'a> AsmGenerator<'a> {
                 return vec![
                     self.gen_node(node.lhs.as_ref().unwrap(), options),
                     Self::pop(X0),
-                    Self::epilogue(),
+                    Self::epilogue(options.offset),
                 ]
                 .into();
             }
