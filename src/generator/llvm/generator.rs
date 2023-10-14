@@ -52,7 +52,10 @@ impl<'a> IrGenerator<'a> {
                 .iter()
                 .map(|(name, f)| self.gen_func(name, f) + "\n")
                 .collect::<Vec<String>>(),
-            vec!["declare i32 @printf(ptr noundef, ...)".to_string() + "\n"],
+            vec![
+                "declare i32 @printf(ptr noundef, ...)".to_string(),
+                "declare i32 @putchar(i8 noundef, ...)".to_string(),
+            ],
         ]
         .concat()
         .join("\n")
@@ -225,25 +228,20 @@ impl<'a> IrGenerator<'a> {
             }
             NodeType::CallFunc => {
                 let Some(return_ty) = &node.cty else {panic!("{:?}", node.cty)};
-                let args_types = [
-                    reserved_functions()
-                        .get(node.global_name.as_str())
-                        .map(|v| {
-                            let Identifier::Static(Type::Func(args, _)) = v else { unreachable!() };
-                            args.iter()
-                                .map(|arg_type| Self::gen_type_for_args(arg_type.clone()))
-                                .collect::<Vec<String>>()
-                        })
-                        .unwrap_or(
-                            node.args
-                                .iter()
-                                .map(|arg| Self::gen_type_for_args(arg.resolve_type().unwrap()))
-                                .collect::<Vec<String>>(),
-                        ),
-                    vec!["...".to_string()],
-                ]
-                .concat()
-                .join(", ");
+                let args_types = reserved_functions()
+                    .get(node.global_name.as_str())
+                    .map(|v| {
+                        let Identifier::Static(Type::Func(args, _)) = v else { unreachable!() };
+                        args.iter()
+                            .map(|arg_type| Self::gen_type_for_args(arg_type.clone()))
+                            .collect::<Vec<String>>()
+                    })
+                    .unwrap_or(
+                        node.args
+                            .iter()
+                            .map(|arg| Self::gen_type_for_args(arg.resolve_type().unwrap()))
+                            .collect::<Vec<String>>(),
+                    );
                 let args = node
                     .args
                     .iter()
@@ -253,10 +251,13 @@ impl<'a> IrGenerator<'a> {
                 let args_passing = node
                     .args
                     .iter()
-                    .map(|arg| {
+                    .enumerate()
+                    .map(|(i, arg)| {
                         format!(
                             "{} noundef {}",
-                            Self::gen_type_for_args(arg.resolve_type().unwrap()),
+                            args_types
+                                .get(node.args.len() - i - 1)
+                                .unwrap_or(&Self::gen_type_for_args(arg.resolve_type().unwrap())),
                             options.register_queue.pop().unwrap(),
                         )
                     })
@@ -269,7 +270,7 @@ impl<'a> IrGenerator<'a> {
                         "  %{} = call {} ({}) @{}({})",
                         options.new_register(),
                         Self::gen_type(return_ty.clone()),
-                        args_types,
+                        args_types.join(", ") + ", ...",
                         node.global_name,
                         args_passing,
                     )],
