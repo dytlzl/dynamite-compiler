@@ -11,27 +11,25 @@ use crate::{
 
 #[derive(Debug)]
 pub struct Options<'a> {
-    breakable_branch_num: usize,
     register_number: &'a mut usize,
     register_map: &'a mut HashMap<usize, usize>,
     register_queue: &'a mut Vec<String>,
 }
 
 impl<'a> Options<'a> {
-    fn increment_and_push_register_number(&mut self) -> usize {
+    fn new_register(&mut self) -> usize {
         *self.register_number += 1;
         self.register_queue
             .push(format!("%{}", self.register_number));
         *self.register_number
     }
     fn register_from_offset(&mut self, offset: usize) -> usize {
-        if self.register_map.contains_key(&offset) {
-            *self.register_map.get(&offset).unwrap()
-        } else {
-            let register = self.increment_and_push_register_number();
-            self.register_map.insert(offset, register);
-            register
+        let entry = self.register_map.entry(offset);
+        let register = *entry.or_insert_with(|| *self.register_number + 1);
+        if register > *self.register_number {
+            *self.register_number = register;
         }
+        register
     }
 }
 
@@ -142,7 +140,6 @@ impl<'a> IrGenerator<'a> {
         }
         let Type::Func(_, return_ty) = &func.cty else {todo!()};
         let options = &mut Options {
-            breakable_branch_num: 0,
             register_number: &mut func.args.len(),
             register_map: &mut HashMap::<usize, usize>::new(),
             register_queue: &mut vec!["?".to_string(); 10],
@@ -167,7 +164,7 @@ impl<'a> IrGenerator<'a> {
                 .iter()
                 .enumerate()
                 .map(|(i, node)| {
-                    let register = options.increment_and_push_register_number();
+                    let register = options.new_register();
                     options.register_map.insert(node.offset.unwrap(), register);
                     format!(
                         "  %{} = alloca {}, align {}",
@@ -220,7 +217,7 @@ impl<'a> IrGenerator<'a> {
             NodeType::LocalVar => {
                 return vec![format!(
                     "  %{} = load {}, ptr %{}, align {}",
-                    options.increment_and_push_register_number(),
+                    options.new_register(),
                     Self::gen_type(node.resolve_type().unwrap()),
                     options.register_from_offset(node.offset.unwrap()),
                     node.resolve_type().unwrap().size_of(),
@@ -270,7 +267,7 @@ impl<'a> IrGenerator<'a> {
                     args,
                     vec![format!(
                         "  %{} = call {} ({}) @{}({})",
-                        options.increment_and_push_register_number(),
+                        options.new_register(),
                         Self::gen_type(return_ty.clone()),
                         args_types,
                         node.global_name,
@@ -385,7 +382,7 @@ impl<'a> IrGenerator<'a> {
                 | NodeType::BitOr => {
                     format!(
                         "  %{} = {} {} {}, {}",
-                        options.increment_and_push_register_number(),
+                        options.new_register(),
                         operation,
                         Self::gen_type(node.lhs.as_ref().unwrap().resolve_type().unwrap()),
                         rhs_register,
