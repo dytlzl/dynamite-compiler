@@ -907,7 +907,7 @@ impl<'a> AstBuilderImpl<'a> {
 
     fn new_string_literal(&mut self, s: &str) -> String {
         self.string_literals.push(s.to_string());
-        format!("L_.str.{}", self.string_literals.len() - 1)
+        format!("@.str.{}", self.string_literals.len() - 1)
     }
 
     pub fn print_functions(&self) {

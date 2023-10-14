@@ -28,3 +28,14 @@ pub fn run(
         .generate(builder.build(is_debug))
         .to_string(target_os)
 }
+
+pub fn run2(code: &str, is_debug: bool) -> String {
+    let error_printer = error::ErrorPrinter::new(code);
+    let tokens = tokenizer::Tokenizer::tokenize(code, is_debug).unwrap_or_else(|e| {
+        error::ErrorLogger::print_syntax_error_position(&error_printer, e);
+        std::process::exit(1)
+    });
+    let mut builder = ast::AstBuilderImpl::new(&error_printer, &tokens);
+    let generator = generator::llvm::generator::IrGenerator::new(&error_printer);
+    generator.generate(builder.build(is_debug))
+}

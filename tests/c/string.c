@@ -2,6 +2,8 @@
 
 int value;
 char *fmt2;
+char *fmt3 = "a = %d, ";
+int a[3] = {3, 5, 7};
 
 int main() {
     value = 777;

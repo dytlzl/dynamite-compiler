@@ -394,7 +394,8 @@ impl<'a> AsmGenerator<'a> {
                     self.gen_node(node.rhs.as_ref().unwrap(), options),
                     Self::pop(X13),
                     Self::pop(X8),
-                    self.operation2rdi(node.lhs.as_ref().unwrap().resolve_type(), MOV, X8),
+                    Assembly::inst2(LDR, X13, Ptr(X8, 8)),
+                    //self.operation2rdi(node.lhs.as_ref().unwrap().resolve_type(), MOV, X8),
                     Self::push(X13),
                 ]
                 .into();

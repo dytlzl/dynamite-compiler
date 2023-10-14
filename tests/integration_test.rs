@@ -1,4 +1,3 @@
-use dynamite_compiler::generator::{Arch, Os};
 use std::{
     fs::{self, remove_file},
     io::Write,
@@ -65,20 +64,12 @@ fn it_compiles_many_functions_c() {
 }
 
 fn compile_and_get_stdout(code: &str) -> String {
-    #[cfg(target_os = "linux")]
-    let target_os = Os::Linux;
-    #[cfg(target_os = "macos")]
-    let target_os = Os::MacOS;
-    #[cfg(target_arch = "x86_64")]
-    let target_arch = Arch::X86_64;
-    #[cfg(target_arch = "aarch64")]
-    let target_arch = Arch::Aarch64;
-    let assembly = dynamite_compiler::run(code, target_arch, target_os, false);
+    let assembly = dynamite_compiler::run2(code, false);
     let mut rng = rand::thread_rng();
     fs::create_dir_all("./tests/temp").unwrap();
     let binary_name = &format!("./tests/temp/{}", Alphanumeric.sample_string(&mut rng, 32));
     let child = Command::new("cc")
-        .args(["-x", "assembler", "-o", binary_name, "-"])
+        .args(["-x", "ir", "-o", binary_name, "-"])
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())

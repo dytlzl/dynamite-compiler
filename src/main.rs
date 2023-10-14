@@ -1,5 +1,5 @@
-use dynamite_compiler::generator::{Arch, Os};
-use dynamite_compiler::run;
+// use dynamite_compiler::generator::{Arch, Os};
+use dynamite_compiler::run2;
 use getopts::Options;
 use std::env;
 use std::fs::File;
@@ -12,14 +12,14 @@ fn print_usage(program: &str, opts: Options) {
 }
 
 fn main() {
-    #[cfg(target_os = "linux")]
-    let target_os = Os::Linux;
-    #[cfg(target_os = "macos")]
-    let target_os = Os::MacOS;
-    #[cfg(target_arch = "x86_64")]
-    let target_arch = Arch::X86_64;
-    #[cfg(target_arch = "aarch64")]
-    let target_arch = Arch::Aarch64;
+    // #[cfg(target_os = "linux")]
+    // let target_os = Os::Linux;
+    // #[cfg(target_os = "macos")]
+    // let target_os = Os::MacOS;
+    // #[cfg(target_arch = "x86_64")]
+    // let target_arch = Arch::X86_64;
+    // #[cfg(target_arch = "aarch64")]
+    // let target_arch = Arch::Aarch64;
     let args: Vec<String> = env::args().collect();
     let program = args[0].clone();
     let mut opts = Options::new();
@@ -47,5 +47,6 @@ fn main() {
         .unwrap_or_else(|e| panic!("file \"{}\" not found: {}", path, e))
         .read_to_string(&mut code)
         .unwrap_or_else(|e| panic!("failed to read file \"{}\": {}", path, e));
-    println!("{}", run(&code, target_arch, target_os, is_debug));
+    // println!("{}", run(&code, target_arch, target_os, is_debug));
+    println!("{}", run2(&code, is_debug));
 }

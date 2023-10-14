@@ -25,8 +25,12 @@ create-temp:
 	mkdir -p ./temp/binary              
 
 c2b: create-temp
-	cargo run $(src) > ./temp/temp.s
-	cc -o ./temp/binary/temp ./temp/temp.s
+	cargo run $(src) > ./temp/temp.ll
+	cc -o ./temp/binary/temp ./temp/temp.ll
+	./temp/binary/temp
+
+l2b: create-temp
+	cc -o ./temp/binary/temp ./temp/temp.ll
 	./temp/binary/temp
 
 s2b: create-temp
@@ -35,6 +39,9 @@ s2b: create-temp
 
 ccc2s: create-temp
 	cc -S -O0 -o ./temp/temp_cc.s $(src)
+
+ccc2l: create-temp
+	cc -S -emit-llvm -O0 -o ./temp/temp_cc.ll $(src)
 
 ccs2b: create-temp
 	cc -o ./temp/binary/temp_cc ./temp/temp_cc.s
