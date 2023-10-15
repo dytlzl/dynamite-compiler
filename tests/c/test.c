@@ -1,9 +1,6 @@
-int test() {
-    int a = 4;
-    int b = 9;
-    return a * b;
-}
-
 int main() {
-    return test();
+    int a[2] = {0};
+    a[0] = 42;
+    a[1] = 3;
+    return a[0];
 }

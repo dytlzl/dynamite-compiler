@@ -55,6 +55,7 @@ impl<'a> IrGenerator<'a> {
             vec![
                 "declare i32 @printf(ptr noundef, ...)".to_string(),
                 "declare i32 @putchar(i8 noundef, ...)".to_string(),
+                "declare i32 @exit(i8 noundef, ...)".to_string(),
             ],
         ]
         .concat()
@@ -213,7 +214,17 @@ impl<'a> IrGenerator<'a> {
                             vec![format!(
                                 "  %{} = alloca {}, align {}",
                                 options.register_from_offset(
-                                    node.lhs.as_ref().unwrap().offset.unwrap()
+                                    node.lhs
+                                        .as_ref()
+                                        .unwrap_or_else(|| {
+                                            self.error_logger.print_error_position(
+                                                node.token.as_ref().unwrap().pos,
+                                                &format!("lhs is None: {:?}", node),
+                                            );
+                                            unreachable!()
+                                        })
+                                        .offset
+                                        .unwrap()
                                 ),
                                 Self::gen_type(node.resolve_type().unwrap()),
                                 node.resolve_type().unwrap().size_of(),
@@ -238,7 +249,17 @@ impl<'a> IrGenerator<'a> {
                     .unwrap_or(
                         node.args
                             .iter()
-                            .map(|arg| Self::gen_type_with_opaque_ptr(arg.resolve_type().unwrap()))
+                            .map(|arg| {
+                                Self::gen_type_with_opaque_ptr(arg.resolve_type().unwrap_or_else({
+                                    || {
+                                        self.error_logger.print_error_position(
+                                            arg.token.as_ref().unwrap().pos,
+                                            &format!("cannot resolve type: {:?}", arg),
+                                        );
+                                        unreachable!()
+                                    }
+                                }))
+                            })
                             .collect::<Vec<String>>(),
                     );
                 let args = node
@@ -286,15 +307,17 @@ impl<'a> IrGenerator<'a> {
                     .concat()
             }
             NodeType::Return => {
+                let lhs = self.gen_node(node.lhs.as_ref().unwrap(), options);
+                *options.register_number += 1;
                 return [
-                    self.gen_node(node.lhs.as_ref().unwrap(), options),
+                    lhs,
                     vec![format!(
                         "  ret {} {}",
                         Self::gen_type(node.resolve_type().unwrap()),
                         options.register_queue.pop().unwrap(),
                     )],
                 ]
-                .concat()
+                .concat();
             }
             NodeType::Num => {
                 options.register_queue.push(node.value.unwrap().to_string());
@@ -314,7 +337,13 @@ impl<'a> IrGenerator<'a> {
                         )
                     ),
                     NodeType::GlobalVar => format!("@{}", node.lhs.as_ref().unwrap().global_name,),
-                    _ => unimplemented!(),
+                    _ => {
+                        self.error_logger.print_error_position(
+                            node.lhs.as_ref().unwrap().token.clone().unwrap().pos,
+                            &format!("unexpected node: {:?}", node.lhs.as_ref().unwrap().nt),
+                        );
+                        unreachable!()
+                    }
                 };
                 return [
                     rhs,
@@ -334,6 +363,29 @@ impl<'a> IrGenerator<'a> {
                     .push(node.lhs.as_ref().unwrap().dest.to_string());
                 return vec![];
             }
+            NodeType::Deref => {
+                return [
+                    self.gen_node(node.lhs.as_ref().unwrap().rhs.as_ref().unwrap(), options),
+                    self.gen_node(node.lhs.as_ref().unwrap().lhs.as_ref().unwrap(), options),
+                    vec![format!(
+                        "  %{} = getelementptr inbounds {}, ptr {}, i64 0, i64 {}",
+                        options.new_register(),
+                        Self::gen_type(
+                            node.lhs
+                                .as_ref()
+                                .unwrap()
+                                .lhs
+                                .as_ref()
+                                .unwrap()
+                                .resolve_type()
+                                .unwrap()
+                        ),
+                        options.register_queue.pop().unwrap(),
+                        options.register_queue.pop().unwrap(),
+                    )],
+                ]
+                .concat()
+            }
             NodeType::LocalVar => {
                 return vec![format!(
                     "  %{} = load {}, ptr %{}, align {}",
@@ -351,6 +403,34 @@ impl<'a> IrGenerator<'a> {
                     node.global_name,
                     node.resolve_type().unwrap().size_of(),
                 )]
+            }
+            NodeType::If => {
+                let cond = self.gen_node(node.cond.as_ref().unwrap(), options);
+                let cond_result_register = options.register_queue.pop().unwrap();
+                let then_register = options.new_register();
+                let then = self.gen_node(node.then.as_ref().unwrap(), options);
+                let else_register = options.new_register();
+                let els = node
+                    .els
+                    .as_ref()
+                    .map(|n| self.gen_node(n, options))
+                    .unwrap_or(vec![]);
+                let end_register = options.new_register();
+                return [
+                    cond,
+                    vec![format!(
+                        "  br i1 {}, label %{}, label %{}",
+                        cond_result_register, then_register, else_register
+                    )],
+                    vec![format!("\n{}:", then_register)],
+                    then,
+                    vec![format!("  br label %{}", end_register)],
+                    vec![format!("\n{}:", else_register)],
+                    els,
+                    vec![format!("  br label %{}", end_register)],
+                    vec![format!("\n{}:", end_register)],
+                ]
+                .concat();
             }
             _ => {}
         }
@@ -407,7 +487,13 @@ impl<'a> IrGenerator<'a> {
                         "  %{} = {} {} {}, {}",
                         options.new_register(),
                         operation,
-                        Self::gen_type(node.lhs.as_ref().unwrap().resolve_type().unwrap()),
+                        Self::gen_type(node.resolve_type().unwrap_or_else(|| {
+                            self.error_logger.print_error_position(
+                                node.token.as_ref().unwrap().pos,
+                                &format!("cannot resolve type: {:?}", node.lhs),
+                            );
+                            unreachable!()
+                        })),
                         rhs_register,
                         lhs_register,
                     )

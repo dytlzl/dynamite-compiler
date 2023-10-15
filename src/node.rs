@@ -156,16 +156,13 @@ impl Node {
             }
             NodeType::Deref => self.lhs.as_ref().unwrap().dest_type(),
             _ => {
-                if let Some(lhs) = self.lhs.as_ref() {
-                    if let (None, Some(rhs)) = (lhs.dest_type(), self.rhs.as_ref()) {
-                        if rhs.dest_type().is_some() {
-                            return rhs.resolve_type();
-                        }
-                    }
-                    lhs.resolve_type()
-                } else {
-                    unreachable!();
+                if let Some(ty) = self.lhs.as_ref().unwrap().resolve_type() {
+                    return Some(ty);
                 }
+                if let Some(ty) = self.rhs.as_ref().unwrap().resolve_type() {
+                    return Some(ty);
+                }
+                None
             }
         }
     }

@@ -43,6 +43,15 @@ fn it_compiles_string_c() {
     assert_eq!(got, "a = 777, b = 755, c = 222\n")
 }
 
+#[test]
+fn it_compiles_simple_expr_c() {
+    let code = &fs::read_to_string("./tests/c/simple_expr.c").unwrap();
+    let got = compile_and_get_stdout(code);
+    got.split("\n")
+        .filter(|s| !s.is_empty() && !s.ends_with("OK"))
+        .for_each(|s| panic!("assertion failed:\n  {}\n", s));
+}
+
 #[cfg(target_arch = "x86_64")]
 #[test]
 fn it_compiles_expr_c() {

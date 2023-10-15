@@ -731,9 +731,9 @@ impl<'a> AstBuilderImpl<'a> {
         if self.attempt_reserved("+").is_some() {
         } else if let Some(t) = self.attempt_reserved("-") {
             return Node::new_with_op(
-                Some(t),
+                Some(t.clone()),
                 NodeType::Sub,
-                Node::new_with_num(None, 0),
+                Node::new_with_num(Some(t.clone()), 0),
                 self.prim(),
             );
         }
