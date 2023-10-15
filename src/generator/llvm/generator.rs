@@ -67,21 +67,29 @@ impl<'a> IrGenerator<'a> {
             .enumerate()
             .map(|(i, str)| {
                 format!(
-                    "@.str.{} = private unnamed_addr constant [{} x i8] c\"{}\", align 1",
+                    "@.str.{} = private unnamed_addr constant [{} x i8] c\"{}\\00\", align 1",
                     i,
                     str.replace("\\\\", "*").replace('\\', "").len() + 1,
-                    str.replace("\\n", "\\0A\\00")
+                    str.replace("\\n", "\\0A")
                 )
             })
             .collect::<Vec<String>>()
     }
 
+    fn align(ty: &Type) -> usize {
+        match ty {
+            Type::Ptr(_) => 8,
+            Type::Arr(child_ty, _) => Self::align(child_ty),
+            _ => ty.size_of(),
+        }
+    }
+
     fn gen_global_variable(&self, name: &str, gv: &GlobalVariable) -> String {
         format!(
-            "@{} = common global {}, align {}",
+            "@{} = global {}, align {}",
             name,
             Self::gen_initializer_element(&gv.ty, gv.data.as_ref()),
-            gv.ty.size_of()
+            Self::align(&gv.ty),
         )
     }
 
@@ -95,7 +103,7 @@ impl<'a> IrGenerator<'a> {
         }
     }
 
-    fn gen_type_for_args(ty: Type) -> String {
+    fn gen_type_with_opaque_ptr(ty: Type) -> String {
         match ty {
             Type::I8 => "i8".to_string(),
             Type::I32 => "i32".to_string(),
@@ -123,7 +131,7 @@ impl<'a> IrGenerator<'a> {
                     format!("{} null", Self::gen_type(ty.clone()))
                 }
             }
-            Type::Ptr(_) => format!("{} null", Self::gen_type(ty.clone())),
+            Type::Ptr(_) => format!("{} null", Self::gen_type_with_opaque_ptr(ty.clone())),
             Type::I8 | Type::I32 => format!(
                 "{} {}",
                 Self::gen_type(ty.clone()),
@@ -217,15 +225,6 @@ impl<'a> IrGenerator<'a> {
                     .collect::<Vec<Vec<String>>>()
                     .concat()
             }
-            NodeType::LocalVar => {
-                return vec![format!(
-                    "  %{} = load {}, ptr %{}, align {}",
-                    options.new_register(),
-                    Self::gen_type(node.resolve_type().unwrap()),
-                    options.register_from_offset(node.offset.unwrap()),
-                    node.resolve_type().unwrap().size_of(),
-                )]
-            }
             NodeType::CallFunc => {
                 let Some(return_ty) = &node.cty else {panic!("{:?}", node.cty)};
                 let args_types = reserved_functions()
@@ -233,13 +232,13 @@ impl<'a> IrGenerator<'a> {
                     .map(|v| {
                         let Identifier::Static(Type::Func(args, _)) = v else { unreachable!() };
                         args.iter()
-                            .map(|arg_type| Self::gen_type_for_args(arg_type.clone()))
+                            .map(|arg_type| Self::gen_type_with_opaque_ptr(arg_type.clone()))
                             .collect::<Vec<String>>()
                     })
                     .unwrap_or(
                         node.args
                             .iter()
-                            .map(|arg| Self::gen_type_for_args(arg.resolve_type().unwrap()))
+                            .map(|arg| Self::gen_type_with_opaque_ptr(arg.resolve_type().unwrap()))
                             .collect::<Vec<String>>(),
                     );
                 let args = node
@@ -255,9 +254,9 @@ impl<'a> IrGenerator<'a> {
                     .map(|(i, arg)| {
                         format!(
                             "{} noundef {}",
-                            args_types
-                                .get(node.args.len() - i - 1)
-                                .unwrap_or(&Self::gen_type_for_args(arg.resolve_type().unwrap())),
+                            args_types.get(node.args.len() - i - 1).unwrap_or(
+                                &Self::gen_type_with_opaque_ptr(arg.resolve_type().unwrap())
+                            ),
                             options.register_queue.pop().unwrap(),
                         )
                     })
@@ -270,7 +269,7 @@ impl<'a> IrGenerator<'a> {
                         "  %{} = call {} ({}) @{}({})",
                         options.new_register(),
                         Self::gen_type(return_ty.clone()),
-                        args_types.join(", ") + ", ...",
+                        [args_types, vec!["...".to_string()]].concat().join(", "),
                         node.global_name,
                         args_passing,
                     )],
@@ -302,23 +301,28 @@ impl<'a> IrGenerator<'a> {
                 return vec![];
             }
             NodeType::Assign => {
-                if node.rhs.as_ref().unwrap().nt == NodeType::Num {
-                    return vec![format!(
-                        "  store {} {}, ptr %{}, align {}",
-                        Self::gen_type(node.rhs.as_ref().unwrap().resolve_type().unwrap()),
-                        node.rhs.as_ref().unwrap().value.unwrap(),
-                        options.register_from_offset(node.lhs.as_ref().unwrap().offset.unwrap()),
-                        node.lhs.as_ref().unwrap().resolve_type().unwrap().size_of(),
-                    )];
-                }
                 let rhs = self.gen_node(node.rhs.as_ref().unwrap(), options);
+                let lhs = match node.lhs.as_ref().unwrap().nt {
+                    NodeType::LocalVar => format!(
+                        "%{}",
+                        options.register_from_offset(
+                            node.lhs
+                                .as_ref()
+                                .unwrap()
+                                .offset
+                                .unwrap_or_else(|| panic!("{:?}", node)),
+                        )
+                    ),
+                    NodeType::GlobalVar => format!("@{}", node.lhs.as_ref().unwrap().global_name,),
+                    _ => unimplemented!(),
+                };
                 return [
                     rhs,
                     vec![format!(
-                        "  store {} {}, ptr %{}, align {}",
+                        "  store {} {}, ptr {}, align {}",
                         Self::gen_type(node.rhs.as_ref().unwrap().resolve_type().unwrap()),
                         options.register_queue.pop().unwrap(),
-                        options.register_from_offset(node.lhs.as_ref().unwrap().offset.unwrap()),
+                        lhs,
                         node.lhs.as_ref().unwrap().resolve_type().unwrap().size_of(),
                     )],
                 ]
@@ -329,6 +333,24 @@ impl<'a> IrGenerator<'a> {
                     .register_queue
                     .push(node.lhs.as_ref().unwrap().dest.to_string());
                 return vec![];
+            }
+            NodeType::LocalVar => {
+                return vec![format!(
+                    "  %{} = load {}, ptr %{}, align {}",
+                    options.new_register(),
+                    Self::gen_type(node.resolve_type().unwrap()),
+                    options.register_from_offset(node.offset.unwrap()),
+                    node.resolve_type().unwrap().size_of(),
+                )]
+            }
+            NodeType::GlobalVar => {
+                return vec![format!(
+                    "  %{} = load {}, ptr @{}, align {}",
+                    options.new_register(),
+                    Self::gen_type(node.resolve_type().unwrap()),
+                    node.global_name,
+                    node.resolve_type().unwrap().size_of(),
+                )]
             }
             _ => {}
         }
