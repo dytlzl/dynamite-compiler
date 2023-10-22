@@ -3,5 +3,8 @@
 /temp
 /bin
 /asm
+/tests/temp
 
 .idea
+core
+*.core

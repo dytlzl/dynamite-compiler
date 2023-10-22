@@ -1,10 +1,15 @@
 [package]
 name = "dynamite_compiler"
 version = "0.1.0"
-authors = ["unknown <unknown@example.com>"]
-edition = "2018"
+authors = ["dytlzl <dytlzl.dev@gmail.com>"]
+edition = "2021"
 default-run = "dynamite_compiler"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+getopts = "0.2"
+
+[dev-dependencies]
+rand = "0.8.5"
+test-case = "3.2.1"

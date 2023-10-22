@@ -1,5 +1,5 @@
-use crate::token::Token;
 use crate::ctype::Type;
+use crate::token::Token;
 use std::mem::swap;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -45,8 +45,7 @@ impl Default for NodeType {
     }
 }
 
-
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone)]
 pub struct Node {
     pub nt: NodeType,
     pub cty: Option<Type>,
@@ -79,10 +78,8 @@ impl Node {
     pub fn new_with_op(token: Option<Token>, nt: NodeType, lhs: Node, rhs: Node) -> Self {
         let (mut lhs, mut rhs) = (lhs, rhs);
         if let NodeType::Add = nt {
-            if let Some(_) = lhs.dest_type() {} else {
-                if let Some(_) = rhs.dest_type() {
-                    swap(&mut lhs, &mut rhs);
-                }
+            if lhs.dest_type().is_none() && rhs.dest_type().is_some() {
+                swap(&mut lhs, &mut rhs);
             }
         }
         Self {
@@ -115,7 +112,7 @@ impl Node {
             nt: NodeType::If,
             cond: Some(Box::new(cond)),
             then: Some(Box::new(then)),
-            els: if let Some(els) = els { Some(Box::new(els)) } else { None },
+            els: els.map(Box::new),
             ..Self::default()
         }
     }
@@ -128,20 +125,28 @@ impl Node {
             ..Self::default()
         }
     }
-    pub fn new_for_node(token: Option<Token>, ini: Option<Node>, cond: Option<Node>, upd: Option<Node>, then: Node) -> Self {
+    pub fn new_for_node(
+        token: Option<Token>,
+        ini: Option<Node>,
+        cond: Option<Node>,
+        upd: Option<Node>,
+        then: Node,
+    ) -> Self {
         Self {
             token,
             nt: NodeType::For,
-            ini: if let Some(d) = ini { Some(Box::new(d)) } else { None },
-            cond: if let Some(d) = cond { Some(Box::new(d)) } else { None },
-            upd: if let Some(d) = upd { Some(Box::new(d)) } else { None },
+            ini: ini.map(Box::new),
+            cond: cond.map(Box::new),
+            upd: upd.map(Box::new),
             then: Some(Box::new(then)),
             ..Self::default()
         }
     }
     pub fn resolve_type(&self) -> Option<Type> {
         match self.nt {
-            NodeType::LocalVar | NodeType::Num | NodeType::CallFunc | NodeType::GlobalVar => { self.cty.clone() }
+            NodeType::LocalVar | NodeType::Num | NodeType::CallFunc | NodeType::GlobalVar => {
+                self.cty.clone()
+            }
             NodeType::Addr => {
                 if let Some(ty) = self.lhs.as_ref().unwrap().resolve_type() {
                     Some(Type::Ptr(Box::new(ty)))
@@ -149,20 +154,24 @@ impl Node {
                     self.cty.clone()
                 }
             }
-            NodeType::Deref => {
-                self.lhs.as_ref().unwrap().dest_type()
-            }
+            NodeType::Deref => self.lhs.as_ref().unwrap().dest_type(),
             _ => {
-                if let Some(lhs) = self.lhs.as_ref() {
-                    if let (None, Some(rhs)) = (lhs.dest_type(), self.rhs.as_ref()) {
-                        if let Some(_) = rhs.dest_type() {
-                            return rhs.resolve_type();
-                        }
+                if let Some(node) = self.lhs.as_ref() {
+                    if let Some(ty) = node.resolve_type() {
+                        return Some(ty);
                     }
-                    lhs.resolve_type()
-                } else {
-                    unreachable!();
                 }
+                if let Some(node) = self.rhs.as_ref() {
+                    if let Some(ty) = node.resolve_type() {
+                        return Some(ty);
+                    }
+                }
+                if let Some(node) = self.then.as_ref() {
+                    if let Some(ty) = node.resolve_type() {
+                        return Some(ty);
+                    }
+                }
+                None
             }
         }
     }
@@ -173,33 +182,122 @@ impl Node {
             None
         }
     }
-    pub fn print(&self, indent: usize) {
-        let indent_str = " ".repeat(indent);
+    pub fn to_debug_string(&self, indent: usize) -> String {
         match self.nt {
             NodeType::LocalVar => {
-                eprintln!("{}LocalVar: {{ type: {:?}, offset: {} }}", &indent_str,
-                          self.cty.as_ref().unwrap(), self.offset.unwrap());
+                format!(
+                    "LocalVar: {{ type: {:?}, offset: {} }}",
+                    self.cty.as_ref().unwrap(),
+                    self.offset.unwrap()
+                )
             }
             NodeType::GlobalVar => {
-                eprintln!("{}GlobalVar: {{ name: {}{} }}", &indent_str,
-                          &self.global_name, &self.dest);
+                format!("GlobalVar: {{ name: {}{} }}", &self.global_name, &self.dest)
             }
             NodeType::Num => {
-                eprintln!("{}Num: {}", &indent_str, self.value.unwrap());
+                format!("Num: {}", self.value.unwrap())
             }
-            _ => {
-                eprintln!("{}{:?} {{", &indent_str, self.nt);
-                self.ini.iter().for_each(|c| c.print(indent + 2));
-                self.cond.iter().for_each(|c| c.print(indent + 2));
-                self.upd.iter().for_each(|c| c.print(indent + 2));
-                self.then.iter().for_each(|c| c.print(indent + 2));
-                self.els.iter().for_each(|c| c.print(indent + 2));
-                self.lhs.iter().for_each(|c| c.print(indent + 2));
-                self.rhs.iter().for_each(|c| c.print(indent + 2));
-                self.children.iter().for_each(|c| c.print(indent + 2));
-                self.args.iter().for_each(|c| c.print(indent + 2));
-                eprintln!("{}}}", &indent_str);
-            }
+            _ => [
+                vec![format!("{:?}:", self.nt)],
+                self.ini
+                    .iter()
+                    .map(|c| {
+                        format!(
+                            "{}ini->{}",
+                            " ".repeat(indent),
+                            c.to_debug_string(indent + 2)
+                        )
+                    })
+                    .collect::<Vec<String>>(),
+                self.cond
+                    .iter()
+                    .map(|c| {
+                        format!(
+                            "{}cond->{}",
+                            " ".repeat(indent),
+                            c.to_debug_string(indent + 2)
+                        )
+                    })
+                    .collect::<Vec<String>>(),
+                self.upd
+                    .iter()
+                    .map(|c| {
+                        format!(
+                            "{}upd->{}",
+                            " ".repeat(indent),
+                            c.to_debug_string(indent + 2)
+                        )
+                    })
+                    .collect::<Vec<String>>(),
+                self.then
+                    .iter()
+                    .map(|c| {
+                        format!(
+                            "{}then->{}",
+                            " ".repeat(indent),
+                            c.to_debug_string(indent + 2)
+                        )
+                    })
+                    .collect::<Vec<String>>(),
+                self.els
+                    .iter()
+                    .map(|c| {
+                        format!(
+                            "{}els->{}",
+                            " ".repeat(indent),
+                            c.to_debug_string(indent + 2)
+                        )
+                    })
+                    .collect::<Vec<String>>(),
+                self.lhs
+                    .iter()
+                    .map(|c| {
+                        format!(
+                            "{}lhs->{}",
+                            " ".repeat(indent),
+                            c.to_debug_string(indent + 2)
+                        )
+                    })
+                    .collect::<Vec<String>>(),
+                self.rhs
+                    .iter()
+                    .map(|c| {
+                        format!(
+                            "{}rhs->{}",
+                            " ".repeat(indent),
+                            c.to_debug_string(indent + 2)
+                        )
+                    })
+                    .collect::<Vec<String>>(),
+                self.children
+                    .iter()
+                    .map(|c| {
+                        format!(
+                            "{}children->{}",
+                            " ".repeat(indent),
+                            c.to_debug_string(indent + 2)
+                        )
+                    })
+                    .collect::<Vec<String>>(),
+                self.args
+                    .iter()
+                    .map(|c| {
+                        format!(
+                            "{}args->{}",
+                            " ".repeat(indent),
+                            c.to_debug_string(indent + 2)
+                        )
+                    })
+                    .collect::<Vec<String>>(),
+            ]
+            .concat()
+            .join("\n"),
         }
+    }
+}
+
+impl std::fmt::Debug for Node {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.to_debug_string(2))
     }
 }

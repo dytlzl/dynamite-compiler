@@ -4,7 +4,7 @@ pub enum Type {
     I32,
     Ptr(Box<Type>),
     Arr(Box<Type>, usize),
-    Func(Vec<Type>, Box<Type>)
+    Func(Vec<Type>, Box<Type>),
 }
 
 impl Type {
@@ -13,7 +13,7 @@ impl Type {
             Type::I8 => 1,
             Type::I32 => 4,
             Type::Ptr(_) => 8,
-            Type::Arr(t, s) => t.size_of()*s,
+            Type::Arr(t, s) => t.size_of() * s,
             Type::Func(..) => 1,
         }
     }
@@ -21,7 +21,7 @@ impl Type {
         match self {
             Type::Ptr(c) => Some(*c.clone()),
             Type::Arr(c, _) => Some(*c.clone()),
-            _ => None
+            _ => None,
         }
     }
 }

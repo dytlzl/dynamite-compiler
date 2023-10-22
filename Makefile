@@ -1,25 +1,50 @@
-.PHONY: test test-linux compile assemble run run-asm
-test:
-	cargo build
-	./test/test.sh $(if $(linux),-no-pie,)
+docker_image := rust:1.72.0
+test_options := --target x86_64-apple-darwin
+src := ./tests/c/simple.c
+
+ci:
+	cargo fmt
+	cargo clippy
+	cargo test $(test_options)
 
 test-linux:
-	docker run --rm \
-        -v $(shell pwd):/home \
-        -w /home \
-        -it rust:1.46 \
-        make test linux=1
+	docker run --platform linux/amd64 --rm \
+        -v $(shell pwd):/workspace \
+        -w /workspace \
+        -it $(docker_image) \
+        cargo test
 
-src := ./temp/main.c
+test-linux-aarch64:
+	docker run --platform linux/arm64 --rm \
+        -v $(shell pwd):/workspace \
+        -w /workspace \
+        -it $(docker_image)  \
+        cargo test
 
-compile:
-	cargo run $(if $(debug),debug,) $(src) > ./temp/main.s
+create-temp:
+	mkdir -p ./temp/binary              
 
-assemble:
-	cc $(if $(linux),-no-pie,) -o ./temp/main ./temp/main.s 
+c2b: create-temp
+	cargo run $(src) > ./temp/temp.ll
+	cc -o ./temp/binary/temp ./temp/temp.ll
+	./temp/binary/temp
 
-run: compile assemble
-	./temp/main
+l2b: create-temp
+	cc -o ./temp/binary/temp ./temp/temp.ll
+	./temp/binary/temp
 
-run-asm: assemble
-	./temp/main
+s2b: create-temp
+	cc -o ./temp/binary/temp ./temp/temp.s
+	./temp/binary/temp
+
+ccc2s: create-temp
+	cc -S -O0 -o ./temp/temp_cc.s $(src)
+
+ccc2l: create-temp
+	cc -S -emit-llvm -O0 -o ./temp/temp_cc.ll $(src)
+
+ccs2b: create-temp
+	cc -o ./temp/binary/temp_cc ./temp/temp_cc.s
+	./temp/binary/temp_cc
+
+ccc2b: ccc2s ccs2b

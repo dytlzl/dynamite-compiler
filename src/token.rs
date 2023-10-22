@@ -13,7 +13,7 @@ impl Default for TokenType {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Token {
     pub tt: TokenType,
     pub pos: usize,
