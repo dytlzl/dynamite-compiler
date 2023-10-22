@@ -25,8 +25,8 @@ pub trait Generator {
 
 pub fn new<'a>(
     target_arch: Arch,
-    error_printer: &'a ErrorPrinter,
     target_os: Os,
+    error_printer: &'a ErrorPrinter,
 ) -> Box<dyn Generator + 'a> {
     match target_arch {
         Arch::Aarch64 => Box::new(aarch64::generator::AsmGenerator::new(

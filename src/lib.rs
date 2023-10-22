@@ -9,33 +9,37 @@ pub mod token;
 pub mod tokenizer;
 pub mod trie;
 
-use ast::AstBuilder;
+use ast::{AstBuilder, ProgramAst};
+use generator::{Arch, Os};
 
-pub fn run(
-    code: &str,
-    target_arch: generator::Arch,
-    target_os: generator::Os,
-    is_debug: bool,
-) -> String {
+pub fn gen(code: &str, output_option: &str, is_debug: bool) -> String {
     let error_printer = error::ErrorPrinter::new(code);
     let tokens = tokenizer::Tokenizer::tokenize(code, is_debug).unwrap_or_else(|e| {
         error::ErrorLogger::print_syntax_error_position(&error_printer, e);
         std::process::exit(1)
     });
     let mut builder = ast::AstBuilderImpl::new(&error_printer, &tokens);
-    let generator = generator::new(target_arch, &error_printer, target_os);
-    generator
-        .generate(builder.build(is_debug))
+    let ast = builder.build(is_debug);
+    match output_option {
+        "asm" => gen_asm(ast, &error_printer),
+        _ => gen_llvm_ir(ast, &error_printer),
+    }
+}
+
+fn gen_asm(ast: ProgramAst, error_printer: &error::ErrorPrinter) -> String {
+    #[cfg(target_os = "linux")]
+    let target_os = Os::Linux;
+    #[cfg(target_os = "macos")]
+    let target_os = Os::MacOS;
+    #[cfg(target_arch = "x86_64")]
+    let target_arch = Arch::X86_64;
+    #[cfg(target_arch = "aarch64")]
+    let target_arch = Arch::Aarch64;
+    generator::new(target_arch, target_os, error_printer)
+        .generate(ast)
         .to_string(target_os)
 }
 
-pub fn run2(code: &str, is_debug: bool) -> String {
-    let error_printer = error::ErrorPrinter::new(code);
-    let tokens = tokenizer::Tokenizer::tokenize(code, is_debug).unwrap_or_else(|e| {
-        error::ErrorLogger::print_syntax_error_position(&error_printer, e);
-        std::process::exit(1)
-    });
-    let mut builder = ast::AstBuilderImpl::new(&error_printer, &tokens);
-    let generator = generator::llvm::generator::IrGenerator::new(&error_printer);
-    generator.generate(builder.build(is_debug))
+fn gen_llvm_ir(ast: ProgramAst, error_printer: &error::ErrorPrinter) -> String {
+    generator::llvm::generator::IrGenerator::new(error_printer).generate(ast)
 }

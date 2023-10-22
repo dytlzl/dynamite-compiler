@@ -1,5 +1,4 @@
-// use dynamite_compiler::generator::{Arch, Os};
-use dynamite_compiler::run2;
+use dynamite_compiler::gen;
 use getopts::Options;
 use std::env;
 use std::fs::File;
@@ -12,18 +11,11 @@ fn print_usage(program: &str, opts: Options) {
 }
 
 fn main() {
-    // #[cfg(target_os = "linux")]
-    // let target_os = Os::Linux;
-    // #[cfg(target_os = "macos")]
-    // let target_os = Os::MacOS;
-    // #[cfg(target_arch = "x86_64")]
-    // let target_arch = Arch::X86_64;
-    // #[cfg(target_arch = "aarch64")]
-    // let target_arch = Arch::Aarch64;
     let args: Vec<String> = env::args().collect();
     let program = args[0].clone();
     let mut opts = Options::new();
     opts.optflag("", "debug", "print debug info");
+    opts.optflag("o", "output", "");
     opts.optflag("h", "help", "print this help menu");
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
@@ -35,6 +27,7 @@ fn main() {
         print_usage(&program, opts);
         return;
     }
+    let output_option = matches.opt_str("output").unwrap_or("llvm".to_string());
     let is_debug = matches.opt_present("debug");
     let path = if !matches.free.is_empty() {
         matches.free[0].clone()
@@ -47,6 +40,5 @@ fn main() {
         .unwrap_or_else(|e| panic!("file \"{}\" not found: {}", path, e))
         .read_to_string(&mut code)
         .unwrap_or_else(|e| panic!("failed to read file \"{}\": {}", path, e));
-    // println!("{}", run(&code, target_arch, target_os, is_debug));
-    println!("{}", run2(&code, is_debug));
+    println!("{}", gen(&code, &output_option, is_debug));
 }

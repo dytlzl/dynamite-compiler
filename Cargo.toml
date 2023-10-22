@@ -12,3 +12,4 @@ getopts = "0.2"
 
 [dev-dependencies]
 rand = "0.8.5"
+test-case = "3.2.1"
