@@ -561,8 +561,13 @@ impl<'a> AsmGenerator<'a> {
             NodeType::GlobalVar => vec![
                 if !node.dest.is_empty() {
                     vec![
-                        Assembly::inst2(ADRP, X8, node.dest.clone() + "@PAGE"),
-                        Assembly::inst3(ADD, X8, X8, node.dest.clone() + "@PAGEOFF"),
+                        Assembly::inst2(ADRP, X8, node.dest.clone().replace('@', "L_") + "@PAGE"),
+                        Assembly::inst3(
+                            ADD,
+                            X8,
+                            X8,
+                            node.dest.clone().replace('@', "L_") + "@PAGEOFF",
+                        ),
                     ]
                     .into()
                 } else {
@@ -623,5 +628,6 @@ impl<'a> AsmGenerator<'a> {
             },
             s
         )
+        .replace('@', "L_")
     }
 }

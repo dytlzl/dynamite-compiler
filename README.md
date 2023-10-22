@@ -1,6 +1,6 @@
 # dynamite-compiler
 
-Compiler for a language with syntax similar to the C language, written in Rust
+A compiler for a language with syntax similar to the C language, written in Rust
 
 > [!IMPORTANT]
 > This project is development phase and is not ready for use.

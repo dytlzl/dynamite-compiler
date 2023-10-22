@@ -154,9 +154,9 @@ impl<'a> AsmGenerator<'a> {
             _ => format!(
                 "  .8byte {}",
                 if let Some(GlobalVariableData::Elem(s)) = data {
-                    s
+                    s.replace('@', "L_")
                 } else {
-                    "0"
+                    "0".to_string()
                 }
             )
             .into(),
@@ -534,7 +534,7 @@ impl<'a> AsmGenerator<'a> {
         match node.nt {
             NodeType::GlobalVar => vec![
                 if !node.dest.is_empty() {
-                    Assembly::inst2(LEA, RAX, PtrAdd(RIP, node.dest.clone()))
+                    Assembly::inst2(LEA, RAX, PtrAdd(RIP, node.dest.clone().replace('@', "L_")))
                 } else {
                     Assembly::inst2(LEA, RAX, PtrAdd(RIP, self.with_prefix(&node.global_name)))
                 },
@@ -585,5 +585,6 @@ impl<'a> AsmGenerator<'a> {
             },
             s
         )
+        .replace('@', "L_")
     }
 }

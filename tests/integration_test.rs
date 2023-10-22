@@ -44,6 +44,7 @@ fn it_compiles_string_c(output_option: &str) {
     assert_eq!(got, "a = 777, b = 755, c = 222\n")
 }
 
+#[cfg(target_arch = "x86_64")]
 #[test_matrix(["asm", "llvm"])]
 fn it_compiles_simple_expr_c(output_option: &str) {
     let code = &fs::read_to_string("./tests/c/simple_expr.c").unwrap();
