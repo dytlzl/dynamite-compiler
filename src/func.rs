@@ -12,10 +12,15 @@ pub struct Func {
 }
 
 impl Func {
-    pub fn print(&self) {
-        eprintln!("args:");
-        self.args.iter().for_each(|arg| arg.print(0));
-        eprintln!("body:");
-        self.body.iter().for_each(|n| n.print(0));
+    pub fn to_debug_string(&self) -> String {
+        format!(
+            "args:\n{:?}\nbody:\n{:?}",
+            self.args
+                .iter()
+                .map(|arg| format!("  {}", arg.to_debug_string(4))),
+            self.body
+                .iter()
+                .map(|n| format!("  {}", n.to_debug_string(4))),
+        )
     }
 }

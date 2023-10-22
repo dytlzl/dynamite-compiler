@@ -479,7 +479,7 @@ impl<'a> AstBuilderImpl<'a> {
             }
             Node {
                 token: Some(assign_token.clone()),
-                nt: NodeType::DefVar,
+                nt: NodeType::Block,
                 children: vec,
                 ..Node::default()
             }
@@ -915,8 +915,7 @@ impl<'a> AstBuilderImpl<'a> {
             .iter()
             .filter(|(_, f)| f.body.is_some())
             .for_each(|(s, f)| {
-                eprintln!("[FUNC: {}]", s);
-                f.print();
+                eprintln!("[FUNC: {}]\n{}", s, f.to_debug_string());
             })
     }
 }

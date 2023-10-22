@@ -219,7 +219,7 @@ impl<'a> IrGenerator<'a> {
                                         .unwrap_or_else(|| {
                                             self.error_logger.print_error_position(
                                                 node.token.as_ref().unwrap().pos,
-                                                &format!("lhs is None: {:?}", node),
+                                                &format!("lhs is None:\n{:?}", node),
                                             );
                                             unreachable!()
                                         })
@@ -337,6 +337,21 @@ impl<'a> IrGenerator<'a> {
                         )
                     ),
                     NodeType::GlobalVar => format!("@{}", node.lhs.as_ref().unwrap().global_name,),
+                    NodeType::Deref => {
+                        let lhs = self.gen_node(node.lhs.as_ref().unwrap(), options);
+                        return [
+                            rhs,
+                            lhs,
+                            vec![format!(
+                                "  store {} {}, ptr {}, align {}",
+                                Self::gen_type(node.rhs.as_ref().unwrap().resolve_type().unwrap()),
+                                options.register_queue.pop().unwrap(),
+                                options.register_queue.pop().unwrap(),
+                                node.lhs.as_ref().unwrap().resolve_type().unwrap().size_of(),
+                            )],
+                        ]
+                        .concat();
+                    }
                     _ => {
                         self.error_logger.print_error_position(
                             node.lhs.as_ref().unwrap().token.clone().unwrap().pos,
@@ -363,36 +378,67 @@ impl<'a> IrGenerator<'a> {
                     .push(node.lhs.as_ref().unwrap().dest.to_string());
                 return vec![];
             }
-            NodeType::Deref => {
-                return [
-                    self.gen_node(node.lhs.as_ref().unwrap().rhs.as_ref().unwrap(), options),
-                    self.gen_node(node.lhs.as_ref().unwrap().lhs.as_ref().unwrap(), options),
-                    vec![format!(
-                        "  %{} = getelementptr inbounds {}, ptr {}, i64 0, i64 {}",
-                        options.new_register(),
-                        Self::gen_type(
-                            node.lhs
-                                .as_ref()
-                                .unwrap()
-                                .lhs
-                                .as_ref()
-                                .unwrap()
-                                .resolve_type()
-                                .unwrap()
-                        ),
-                        options.register_queue.pop().unwrap(),
-                        options.register_queue.pop().unwrap(),
-                    )],
-                ]
-                .concat()
-            }
+            NodeType::Deref => match node.lhs.as_ref().unwrap().nt {
+                NodeType::Add => {
+                    let rhs =
+                        self.gen_node(node.lhs.as_ref().unwrap().rhs.as_ref().unwrap(), options);
+                    let lhs =
+                        self.gen_node(node.lhs.as_ref().unwrap().lhs.as_ref().unwrap(), options);
+                    let lhs_register = options.register_queue.pop().unwrap();
+                    let rhs_register = options.register_queue.pop().unwrap();
+                    return [
+                        rhs,
+                        lhs,
+                        vec![format!(
+                            "  %{} = getelementptr inbounds {}, {} {}, i64 0, i64 {}",
+                            options.new_register(),
+                            Self::gen_type(
+                                node.lhs
+                                    .as_ref()
+                                    .unwrap()
+                                    .lhs
+                                    .as_ref()
+                                    .unwrap()
+                                    .resolve_type()
+                                    .unwrap()
+                            ),
+                            Self::gen_type_with_opaque_ptr(
+                                node.lhs
+                                    .as_ref()
+                                    .unwrap()
+                                    .lhs
+                                    .as_ref()
+                                    .unwrap()
+                                    .resolve_type()
+                                    .unwrap()
+                            ),
+                            lhs_register,
+                            rhs_register,
+                        )],
+                    ]
+                    .concat();
+                }
+                NodeType::LocalVar => {
+                    return [
+                        self.gen_node(node.lhs.as_ref().unwrap(), options),
+                        vec![format!(
+                            "  %{} = getelementptr inbounds {}, ptr {}, i64 0, i64 0",
+                            options.new_register(),
+                            Self::gen_type(node.lhs.as_ref().unwrap().resolve_type().unwrap()),
+                            options.register_queue.pop().unwrap(),
+                        )],
+                    ]
+                    .concat()
+                }
+                _ => unreachable!(),
+            },
             NodeType::LocalVar => {
                 return vec![format!(
                     "  %{} = load {}, ptr %{}, align {}",
                     options.new_register(),
                     Self::gen_type(node.resolve_type().unwrap()),
                     options.register_from_offset(node.offset.unwrap()),
-                    node.resolve_type().unwrap().size_of(),
+                    Self::align(&node.resolve_type().unwrap()),
                 )]
             }
             NodeType::GlobalVar => {
@@ -403,6 +449,19 @@ impl<'a> IrGenerator<'a> {
                     node.global_name,
                     node.resolve_type().unwrap().size_of(),
                 )]
+            }
+            NodeType::BitNot => {
+                let lhs = self.gen_node(node.lhs.as_ref().unwrap(), options);
+                return [
+                    lhs,
+                    vec![format!(
+                        "  %{} = xor {} {}, -1",
+                        options.new_register(),
+                        Self::gen_type(node.lhs.as_ref().unwrap().resolve_type().unwrap()),
+                        options.register_queue.pop().unwrap(),
+                    )],
+                ]
+                .concat();
             }
             NodeType::If => {
                 let cond = self.gen_node(node.cond.as_ref().unwrap(), options);
@@ -457,6 +516,8 @@ impl<'a> IrGenerator<'a> {
             NodeType::BitAnd => "and",
             NodeType::BitXor => "xor",
             NodeType::BitOr => "or",
+            NodeType::BitLeft => "shl",
+            NodeType::BitRight => "shr",
             _ => "unknown",
         };
         let rhs_register = options
@@ -482,7 +543,9 @@ impl<'a> IrGenerator<'a> {
                 | NodeType::Le
                 | NodeType::BitAnd
                 | NodeType::BitXor
-                | NodeType::BitOr => {
+                | NodeType::BitOr
+                | NodeType::BitLeft
+                | NodeType::BitRight => {
                     format!(
                         "  %{} = {} {} {}, {}",
                         options.new_register(),
@@ -498,6 +561,7 @@ impl<'a> IrGenerator<'a> {
                         lhs_register,
                     )
                 }
+
                 _ => {
                     self.error_logger.print_error_position(
                         node.token.as_ref().unwrap().pos,
