@@ -10,16 +10,17 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        go: ["1.18"]
-    runs-on: ${{ matrix.os }}
-
-    steps:
+  build-ubuntu:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/dytlzl/dynamite-compiler-dev:0.0.1
+    steps: &steps
     - uses: actions/checkout@v3
     - name: Build
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+  build-macos:
+    runs-on: macos-latest
+    steps:
+    <<: *steps
