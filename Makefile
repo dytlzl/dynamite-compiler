@@ -32,7 +32,7 @@ test-linux-aarch64:
 	make test-linux docker_platform=linux/arm64
 
 docker-push:
-	docker buildx build --push --platform linux/amd64,linux/arm64 -t $(docker_image) .
+	docker buildx build --push --platform linux/amd64,linux/arm64 -t $(docker_image) -f dockerfiles/dev.Dockerfile .
 
 create-temp:
 	mkdir -p ./temp/binary              
