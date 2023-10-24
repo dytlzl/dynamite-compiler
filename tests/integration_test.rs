@@ -79,7 +79,7 @@ fn compile_and_get_stdout(code: &str, output_option: &str) -> String {
     let mut rng = rand::thread_rng();
     fs::create_dir_all("./tests/temp").unwrap();
     let binary_name = &format!("./tests/temp/{}", Alphanumeric.sample_string(&mut rng, 32));
-    let child = Command::new("cc")
+    let child = Command::new("clang")
         .args([
             "-x",
             match output_option {

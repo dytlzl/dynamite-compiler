@@ -1,25 +1,38 @@
-docker_image := rust:1.72.0
+docker_image := ghcr.io/dytlzl/dynamite-compiler-dev:0.0.1
+docker_platform := linux/amd64
+
 test_options := --target x86_64-apple-darwin
 src := ./tests/c/simple.c
 
 ci:
 	cargo fmt
 	cargo clippy
-	cargo test $(test_options)
+	cargo test --target x86_64-apple-darwin
+	cargo test --target aarch64-apple-darwin
+	make test-linux-amd64
+	make test-linux-aarch64
+
+sh-linux:
+	docker run --platform $(docker_platform) --rm \
+        -v $(shell pwd):/workspace \
+        -w /workspace \
+        -it $(docker_image)
 
 test-linux:
-	docker run --platform linux/amd64 --rm \
+	docker run --platform $(docker_platform) --rm \
         -v $(shell pwd):/workspace \
         -w /workspace \
         -it $(docker_image) \
-        cargo test
+        cargo test -q
+
+test-linux-amd64:
+	make test-linux docker_platform=linux/amd64
 
 test-linux-aarch64:
-	docker run --platform linux/arm64 --rm \
-        -v $(shell pwd):/workspace \
-        -w /workspace \
-        -it $(docker_image)  \
-        cargo test
+	make test-linux docker_platform=linux/arm64
+
+docker-push:
+	docker buildx build --push --platform linux/amd64,linux/arm64 -t $(docker_image) .
 
 create-temp:
 	mkdir -p ./temp/binary              
