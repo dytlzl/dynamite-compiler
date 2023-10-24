@@ -37,7 +37,7 @@ jobs:
           context: .
           file: dockerfiles/dev.Dockerfile
           push: true
-          load: true
+          load: false
           tags: ghcr.io/dytlzl/dynamite-compiler-dev:0.0.2
           platforms: linux/amd64,linux/arm/v7,linux/arm64
           cache-from: type=gha
