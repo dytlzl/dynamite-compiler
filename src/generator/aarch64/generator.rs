@@ -43,7 +43,12 @@ impl<'a> AsmGenerator<'a> {
     fn generate(&self, ast: ProgramAst) -> Box<dyn crate::generator::Assembly> {
         Box::<Assembly>::new(
             vec![
-                "	.section	__TEXT,__text,regular,pure_instructions".into(),
+                if let Os::MacOS = self.target_os {
+                    ".section __TEXT,__text,regular,pure_instructions"
+                } else {
+                    ".section .text"
+                }
+                .into(),
                 ast.functions
                     .iter()
                     .map(|(name, f)| {
@@ -206,7 +211,6 @@ impl<'a> AsmGenerator<'a> {
         T1: Into<InstOperand>,
     {
         vec![
-            "; PUSH".into(),
             Assembly::inst3(SUB, X9, X9, 8),
             Assembly::inst2(MOV, X8, operand),
             Assembly::inst2(STR, X8, Ptr(X9, 8)),
@@ -218,7 +222,6 @@ impl<'a> AsmGenerator<'a> {
         T1: Into<InstOperand>,
     {
         vec![
-            "; POP".into(),
             Assembly::inst2(LDR, operand, Ptr(X9, 8)),
             Assembly::inst3(ADD, X9, X9, 8),
         ]
@@ -243,6 +246,9 @@ impl<'a> AsmGenerator<'a> {
                 let fixed_args_len = reserved_functions()
                     .get(node.global_name.as_str())
                     .map(|v| {
+                        if let Os::Linux = self.target_os {
+                            return node.args.len().min(ARGS_REG.len());
+                        }
                         let Identifier::Static(Type::Func(args, _)) = v else { unreachable!() };
                         args.len()
                     })
@@ -561,23 +567,48 @@ impl<'a> AsmGenerator<'a> {
             NodeType::GlobalVar => vec![
                 if !node.dest.is_empty() {
                     vec![
-                        Assembly::inst2(ADRP, X8, node.dest.clone().replace('@', "L_") + "@PAGE"),
+                        Assembly::inst2(
+                            ADRP,
+                            X8,
+                            match self.target_os {
+                                Os::MacOS => node.dest.clone().replace('@', "L_") + "@PAGE",
+                                Os::Linux => node.dest.clone().replace('@', "L_"),
+                            },
+                        ),
                         Assembly::inst3(
                             ADD,
                             X8,
                             X8,
-                            node.dest.clone().replace('@', "L_") + "@PAGEOFF",
+                            match self.target_os {
+                                Os::MacOS => node.dest.clone().replace('@', "L_") + "@PAGEOFF",
+                                Os::Linux => {
+                                    ":lo12:".to_string() + &node.dest.clone().replace('@', "L_")
+                                }
+                            },
                         ),
                     ]
                     .into()
                 } else {
                     vec![
-                        Assembly::inst2(ADRP, X8, self.with_prefix(&node.global_name) + "@PAGE"),
+                        Assembly::inst2(
+                            ADRP,
+                            X8,
+                            match self.target_os {
+                                Os::MacOS => self.with_prefix(&node.global_name) + "@PAGE",
+                                Os::Linux => self.with_prefix(&node.global_name),
+                            },
+                        ),
                         Assembly::inst3(
                             ADD,
                             X8,
                             X8,
-                            self.with_prefix(&node.global_name) + "@PAGEOFF",
+                            match self.target_os {
+                                Os::MacOS => self.with_prefix(&node.global_name) + "@PAGEOFF",
+                                Os::Linux => {
+                                    ":lo12:".to_string()
+                                        + &self.with_prefix(&node.global_name).replace('@', "L_")
+                                }
+                            },
                         ),
                     ]
                     .into()
