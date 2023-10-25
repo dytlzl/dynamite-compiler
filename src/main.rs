@@ -15,8 +15,15 @@ fn main() {
     let program = args[0].clone();
     let mut opts = Options::new();
     opts.optflag("", "debug", "print debug info");
-    opts.optflag("o", "output", "");
     opts.optflag("h", "help", "print this help menu");
+    opts.opt(
+        "o",
+        "output",
+        "output format (asm, llvm)",
+        "FORMAT",
+        getopts::HasArg::Yes,
+        getopts::Occur::Optional,
+    );
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(f) => {

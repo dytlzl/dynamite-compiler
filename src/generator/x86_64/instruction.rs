@@ -35,10 +35,10 @@ use std::fmt::{Debug, Display, Error, Formatter};
 use InstOperator::*;
 
 impl InstOperator {
-    pub fn to_string(&self, target_os: Os) -> &str {
-        if matches!(target_os, Os::Linux) && matches!(self, MOVZX) {
-            return "movzb";
-        }
+    pub fn to_string(&self, _target_os: Os) -> &str {
+        // if matches!(target_os, Os::Linux) && matches!(self, MOVZX) {
+        //     return "movzb";
+        // }
         match self {
             PUSH => "push",
             POP => "pop",
