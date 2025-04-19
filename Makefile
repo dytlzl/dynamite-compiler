@@ -1,4 +1,4 @@
-docker_image := ghcr.io/dytlzl/dynamite-compiler-dev:0.0.1
+docker_image := ghcr.io/dytlzl/dynamite-compiler-dev:latest
 docker_platform := linux/amd64
 
 test_options := --target x86_64-apple-darwin
