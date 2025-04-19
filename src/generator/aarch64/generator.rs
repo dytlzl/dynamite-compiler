@@ -4,7 +4,7 @@ use super::instruction::{
     InstOperator::{self, *},
     Register::{self, *},
 };
-use crate::ast::{reserved_functions, Identifier, ProgramAst};
+use crate::ast::{Identifier, ProgramAst, reserved_functions};
 use crate::ctype::Type;
 use crate::error;
 use crate::func::Func;
@@ -20,7 +20,7 @@ pub struct AsmGenerator<'a> {
 
 const ARGS_REG: [Register; 8] = [X0, X1, X2, X3, X4, X5, X6, X7];
 
-impl<'a> crate::generator::Generator for AsmGenerator<'a> {
+impl crate::generator::Generator for AsmGenerator<'_> {
     fn generate(&self, ast: ProgramAst) -> Box<dyn crate::generator::Assembly> {
         self.generate(ast)
     }
@@ -52,7 +52,7 @@ impl<'a> AsmGenerator<'a> {
                 ast.functions
                     .iter()
                     .map(|(name, f)| {
-                        let func_offset_with_alignment = (f.offset_size + 15) / 16 * 16;
+                        let func_offset_with_alignment = f.offset_size.div_ceil(16) * 16;
                         self.gen_func(name, f, func_offset_with_alignment)
                     })
                     .collect::<Vec<Assembly>>()
@@ -68,7 +68,7 @@ impl<'a> AsmGenerator<'a> {
         )
     }
 
-    fn gen_string_literals(&self, string_literals: &Vec<String>) -> Assembly {
+    fn gen_string_literals(&self, string_literals: &[String]) -> Assembly {
         if string_literals.is_empty() {
             vec![]
         } else {
@@ -249,7 +249,9 @@ impl<'a> AsmGenerator<'a> {
                         if let Os::Linux = self.target_os {
                             return node.args.len().min(ARGS_REG.len());
                         }
-                        let Identifier::Static(Type::Func(args, _)) = v else { unreachable!() };
+                        let Identifier::Static(Type::Func(args, _)) = v else {
+                            unreachable!()
+                        };
                         args.len()
                     })
                     .unwrap_or(node.args.len());

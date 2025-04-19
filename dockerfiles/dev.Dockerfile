@@ -1,4 +1,4 @@
-FROM rust:1.73.0-bookworm
+FROM rust:1.86.0-slim
 
 RUN apt update
 RUN apt install -y lsb-release wget software-properties-common gnupg

@@ -53,7 +53,7 @@ impl Tokenizer {
         let mut tokens = Vec::<Token>::new();
         let reserved_words = RESERVED_WORDS.into_iter().collect::<HashSet<&str>>();
         let reserved_symbols = Trie::new(&RESERVED_SYMBOLS);
-        let chars: Vec<(usize, char)> = code.char_indices().map(|(pos, ch)| (pos, ch)).collect();
+        let chars: Vec<(usize, char)> = code.char_indices().collect();
         let mut i = 0;
         while i < chars.len() {
             match chars[i].1 {
@@ -120,7 +120,7 @@ impl Tokenizer {
                                                 return Err(error::SyntaxError::new(
                                                     i,
                                                     "unexpected EOF",
-                                                ))
+                                                ));
                                             }
                                         }
                                     }
@@ -159,7 +159,7 @@ impl Tokenizer {
                                                 return Err(error::SyntaxError::new(
                                                     pos,
                                                     "multi-character character constant",
-                                                ))
+                                                ));
                                             }
                                         };
                                         tokens.push(Token {
@@ -172,7 +172,7 @@ impl Tokenizer {
                                         tokens.push(Token {
                                             tt: TokenType::Num,
                                             pos,
-                                            i_value: code[pos + 1..pos + 2].as_bytes()[0] as usize,
+                                            i_value: code.as_bytes()[pos + 1..pos + 2][0] as usize,
                                             ..Token::default()
                                         })
                                     }

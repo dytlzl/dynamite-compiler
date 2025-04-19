@@ -12,7 +12,7 @@ pub mod trie;
 use ast::{AstBuilder, ProgramAst};
 use generator::{Arch, Os};
 
-pub fn gen(code: &str, output_option: &str, is_debug: bool) -> String {
+pub fn generate(code: &str, output_option: &str, is_debug: bool) -> String {
     let error_printer = error::ErrorPrinter::new(code);
     let tokens = tokenizer::Tokenizer::tokenize(code, is_debug).unwrap_or_else(|e| {
         error::ErrorLogger::print_syntax_error_position(&error_printer, e);
