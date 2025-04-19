@@ -68,7 +68,7 @@ impl<'a> AsmGenerator<'a> {
         )
     }
 
-    fn gen_string_literals(&self, string_literals: &Vec<String>) -> Assembly {
+    fn gen_string_literals(&self, string_literals: &[String]) -> Assembly {
         if string_literals.is_empty() {
             vec![]
         } else {

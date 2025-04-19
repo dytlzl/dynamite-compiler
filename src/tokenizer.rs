@@ -172,7 +172,7 @@ impl Tokenizer {
                                         tokens.push(Token {
                                             tt: TokenType::Num,
                                             pos,
-                                            i_value: code[pos + 1..pos + 2].as_bytes()[0] as usize,
+                                            i_value: code.as_bytes()[pos + 1..pos + 2][0] as usize,
                                             ..Token::default()
                                         })
                                     }
