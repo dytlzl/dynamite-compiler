@@ -53,7 +53,7 @@ impl Tokenizer {
         let mut tokens = Vec::<Token>::new();
         let reserved_words = RESERVED_WORDS.into_iter().collect::<HashSet<&str>>();
         let reserved_symbols = Trie::new(&RESERVED_SYMBOLS);
-        let chars: Vec<(usize, char)> = code.char_indices().map(|(pos, ch)| (pos, ch)).collect();
+        let chars: Vec<(usize, char)> = code.char_indices().collect();
         let mut i = 0;
         while i < chars.len() {
             match chars[i].1 {

@@ -20,7 +20,7 @@ pub struct AsmGenerator<'a> {
 
 const ARGS_REG: [Register; 6] = [RDI, RSI, RDX, RCX, R8, R9];
 
-impl<'a> crate::generator::Generator for AsmGenerator<'a> {
+impl crate::generator::Generator for AsmGenerator<'_> {
     fn generate(&self, ast: ProgramAst) -> Box<dyn crate::generator::Assembly> {
         self.generate(ast)
     }

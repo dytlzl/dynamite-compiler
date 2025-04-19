@@ -16,7 +16,7 @@ pub struct Options<'a> {
     register_queue: &'a mut Vec<String>,
 }
 
-impl<'a> Options<'a> {
+impl Options<'_> {
     fn new_register(&mut self) -> usize {
         *self.register_number += 1;
         self.register_queue
@@ -479,7 +479,7 @@ impl<'a> IrGenerator<'a> {
                     .els
                     .as_ref()
                     .map(|n| self.gen_node(n, options))
-                    .unwrap_or(vec![]);
+                    .unwrap_or_default();
                 let end_register = options.new_register();
                 return [
                     cond,

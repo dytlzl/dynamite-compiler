@@ -29,7 +29,7 @@ impl Trie {
     pub fn new(reserved_symbols: &[&str]) -> Self {
         // Make a double array
         let mut double_array = Vec::with_capacity(1000);
-        double_array.extend(std::iter::repeat((0, 0)).take(END_SYMBOL * 2 + 1));
+        double_array.extend(std::iter::repeat_n((0, 0), END_SYMBOL * 2 + 1));
         let mut trie = Self { double_array };
         // Make a tree of reserved symbols
         let mut root = Node::default();
@@ -51,8 +51,7 @@ impl Trie {
             let offset = self.double_array[index].1;
             if index + offset + END_SYMBOL >= self.double_array.len() {
                 self.double_array.extend(
-                    std::iter::repeat((0, 0))
-                        .take(index + offset + END_SYMBOL * 3 - self.double_array.len()),
+                    std::iter::repeat_n((0, 0), index + offset + END_SYMBOL * 3 - self.double_array.len()),
                 )
             }
             let is_matching = dict
