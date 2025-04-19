@@ -1,7 +1,7 @@
 use std::{collections::HashMap, vec};
 
 use crate::{
-    ast::{reserved_functions, Identifier, ProgramAst},
+    ast::{Identifier, ProgramAst, reserved_functions},
     ctype::Type,
     error,
     func::Func,
@@ -150,7 +150,9 @@ impl<'a> IrGenerator<'a> {
         if func.body.is_none() {
             return String::new();
         }
-        let Type::Func(_, return_ty) = &func.cty else {todo!()};
+        let Type::Func(_, return_ty) = &func.cty else {
+            todo!()
+        };
         let options = &mut Options {
             register_number: &mut func.args.len(),
             register_map: &mut HashMap::<usize, usize>::new(),
@@ -234,14 +236,18 @@ impl<'a> IrGenerator<'a> {
                         .concat()
                     })
                     .collect::<Vec<Vec<String>>>()
-                    .concat()
+                    .concat();
             }
             NodeType::CallFunc => {
-                let Some(return_ty) = &node.cty else {panic!("{:?}", node.cty)};
+                let Some(return_ty) = &node.cty else {
+                    panic!("{:?}", node.cty)
+                };
                 let args_types = reserved_functions()
                     .get(node.global_name.as_str())
                     .map(|v| {
-                        let Identifier::Static(Type::Func(args, _)) = v else { unreachable!() };
+                        let Identifier::Static(Type::Func(args, _)) = v else {
+                            unreachable!()
+                        };
                         args.iter()
                             .map(|arg_type| Self::gen_type_with_opaque_ptr(arg_type.clone()))
                             .collect::<Vec<String>>()
@@ -304,7 +310,7 @@ impl<'a> IrGenerator<'a> {
                     .iter()
                     .map(|node| self.gen_node(node, options))
                     .collect::<Vec<Vec<String>>>()
-                    .concat()
+                    .concat();
             }
             NodeType::Return => {
                 let lhs = self.gen_node(node.lhs.as_ref().unwrap(), options);
@@ -428,7 +434,7 @@ impl<'a> IrGenerator<'a> {
                             options.register_queue.pop().unwrap(),
                         )],
                     ]
-                    .concat()
+                    .concat();
                 }
                 _ => unreachable!(),
             },
@@ -439,7 +445,7 @@ impl<'a> IrGenerator<'a> {
                     Self::gen_type(node.resolve_type().unwrap()),
                     options.register_from_offset(node.offset.unwrap()),
                     Self::align(&node.resolve_type().unwrap()),
-                )]
+                )];
             }
             NodeType::GlobalVar => {
                 return vec![format!(
@@ -448,7 +454,7 @@ impl<'a> IrGenerator<'a> {
                     Self::gen_type(node.resolve_type().unwrap()),
                     node.global_name,
                     node.resolve_type().unwrap().size_of(),
-                )]
+                )];
             }
             NodeType::BitNot => {
                 let lhs = self.gen_node(node.lhs.as_ref().unwrap(), options);

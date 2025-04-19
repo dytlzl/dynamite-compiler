@@ -120,7 +120,7 @@ impl Tokenizer {
                                                 return Err(error::SyntaxError::new(
                                                     i,
                                                     "unexpected EOF",
-                                                ))
+                                                ));
                                             }
                                         }
                                     }
@@ -159,7 +159,7 @@ impl Tokenizer {
                                                 return Err(error::SyntaxError::new(
                                                     pos,
                                                     "multi-character character constant",
-                                                ))
+                                                ));
                                             }
                                         };
                                         tokens.push(Token {

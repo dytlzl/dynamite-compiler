@@ -205,7 +205,7 @@ impl<'a> AsmGenerator<'a> {
     fn gen_node(&self, node: &Node, offset: usize, breakable_branch_num: usize) -> Assembly {
         match node.nt {
             NodeType::DefVar => {
-                return self.gen_statements(&node.children, offset, breakable_branch_num)
+                return self.gen_statements(&node.children, offset, breakable_branch_num);
             }
             NodeType::CallFunc => {
                 return vec![
@@ -232,7 +232,7 @@ impl<'a> AsmGenerator<'a> {
                     Assembly::inst2(ADD, RSP, RDI),
                     Assembly::inst1(PUSH, RAX),
                 ]
-                .into()
+                .into();
             }
             NodeType::If => {
                 let branch_num = node.token.as_ref().unwrap().pos;

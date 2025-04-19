@@ -39,8 +39,8 @@ pub enum InstOperator {
     NOP,
 }
 
-use std::fmt::{Debug, Display, Error, Formatter};
 use InstOperator::*;
+use std::fmt::{Debug, Display, Error, Formatter};
 
 impl InstOperator {
     pub fn to_string(&self, target_os: Os) -> &str {

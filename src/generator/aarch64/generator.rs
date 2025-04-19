@@ -4,7 +4,7 @@ use super::instruction::{
     InstOperator::{self, *},
     Register::{self, *},
 };
-use crate::ast::{reserved_functions, Identifier, ProgramAst};
+use crate::ast::{Identifier, ProgramAst, reserved_functions};
 use crate::ctype::Type;
 use crate::error;
 use crate::func::Func;
@@ -249,7 +249,9 @@ impl<'a> AsmGenerator<'a> {
                         if let Os::Linux = self.target_os {
                             return node.args.len().min(ARGS_REG.len());
                         }
-                        let Identifier::Static(Type::Func(args, _)) = v else { unreachable!() };
+                        let Identifier::Static(Type::Func(args, _)) = v else {
+                            unreachable!()
+                        };
                         args.len()
                     })
                     .unwrap_or(node.args.len());
