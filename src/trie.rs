@@ -50,9 +50,10 @@ impl Trie {
         loop {
             let offset = self.double_array[index].1;
             if index + offset + END_SYMBOL >= self.double_array.len() {
-                self.double_array.extend(
-                    std::iter::repeat_n((0, 0), index + offset + END_SYMBOL * 3 - self.double_array.len()),
-                )
+                self.double_array.extend(std::iter::repeat_n(
+                    (0, 0),
+                    index + offset + END_SYMBOL * 3 - self.double_array.len(),
+                ))
             }
             let is_matching = dict
                 .children
