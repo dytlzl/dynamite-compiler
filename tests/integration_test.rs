@@ -75,7 +75,7 @@ fn it_compiles_many_functions_c(output_option: &str) {
 }
 
 fn compile_and_get_stdout(code: &str, output_option: &str) -> String {
-    let assembly = dynamite_compiler::gen(code, output_option, false);
+    let assembly = dynamite_compiler::generate(code, output_option, false);
     let mut rng = rand::thread_rng();
     fs::create_dir_all("./tests/temp").unwrap();
     let binary_name = &format!("./tests/temp/{}", Alphanumeric.sample_string(&mut rng, 32));
